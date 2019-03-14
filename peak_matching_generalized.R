@@ -236,7 +236,7 @@ sensor_data2 <- crossing(DT_table,peak_interval) %>%
 # sensor_data3 <- distinct(sensor_data2,DateTime,.keep_all = T)
 
 # add panel_qrs and panel_hrs to matched_peaks
-matched_peaks2 <- matched_peaks %>%
+matched_peaks <- matched_peaks %>%
   select(-view_final) %>%
   # look up panel_qrs by DateTime/DT_pq
   inner_join(rename(select(sensor_data2,DateTime,panel_qrs),DT_pq = DateTime),by = "DT_pq") %>%
@@ -244,22 +244,26 @@ matched_peaks2 <- matched_peaks %>%
   inner_join(rename(select(sensor_data2,DateTime,panel_hrs),DT_ph = DateTime),by = "DT_ph")
 
 
-# sens_filter <- filter(sensor_data,between(DateTime,ymd("2018-03-10",tz=proj_tz),ymd("2018-03-20",tz=proj_tz)))
-# match_filter <- filter(select(matched_peaks,-view_final),between(DT_pq,ymd("2018-03-10",tz=proj_tz),ymd("2018-03-20",tz=proj_tz)))
-
 ################################ make plot of all data
-ggplot(data = sensor_data) + 
-  geom_point(aes(x = DateTime, y = q_rs),color = "black",size = 0.5) +
-  geom_point(aes(x = DateTime, y = h_rs),color = "light grey",size = 0.5) +
+names(cbPalette) <- as.character(expression(grey,orange,lightblue,green,yellow,darkblue,orange,purple))
+model_color <- cbPalette[c("grey","lightblue","purple","orange")]
+names(model_color) <-as.character(c("Discharge","Stage","Q Peak","H Peak"))
+
+ggplot(data = sensor_dat) + 
+  geom_point(aes(x = DateTime, y = q_rs,color = "Discharge"),size = 0.5) +
+  geom_point(aes(x = DateTime, y = h_rs,color = "Stage"),size = 0.5) +
   geom_point(data = matched_peaks,
-             aes(x = DT_pq, y = pq_rs),color = "green",size = 1) +
+             aes(x = DT_pq, y = pq_rs,color = "Q Peak"),size = 1) +
   geom_point(data = matched_peaks,
-             aes(x = DT_ph, y = ph_rs),color = "red",size = 1) +
+             aes(x = DT_ph, y = ph_rs,color = "H Peak"),size = 1) +
+  scale_color_manual(name = '',
+                     values = model_color,
+                     labels =c("Discharge","H Peak","Q Peak","Stage")) +
   ylab("Rescaled h and q") +
-  # xlab("Date") +
-  ggtitle(paste0(round(peak_window*15/60/24),"day peak /",
-                 slope_percentile,"% slope cutoff / ",
-                 round(match_window*15/60),"hr match window")) +
+  xlab("Date") +
+  # ggtitle(paste0(round(peak_window*15/60/24),"day peak /",
+  #                slope_percentile,"% slope cutoff / ",
+  #                round(match_window*15/60),"hr match window")) +
   theme_minimal(base_size =12) +
   # theme_void(base_size =24) +
   theme(strip.background = element_blank(), 
@@ -267,23 +271,30 @@ ggplot(data = sensor_data) +
         panel.grid.major=element_blank(),
         panel.grid.minor=element_blank(),
         axis.line = element_line(size = 0.5, linetype = "solid",
-                                 colour = "black"))+
+                                 colour = "black")) +
   facet_wrap(~cut_ts ,scales = "free",ncol = 1)
 
 
 ################################ make plot of just peaks
-ggplot(data = filter(sensor_data2,!is.na(peak_n))) +
-  geom_point(aes(x = DateTime, y = panel_qrs),color = "black",size = 0.5) +
-  geom_point(aes(x = DateTime, y = panel_hrs),color = "light grey",size = 0.5) +
-  geom_point(data = matched_peaks2,
-             aes(x =  DT_pq, y = panel_qrs),color = "green",size = 1) +
-  geom_point(data = matched_peaks2,
-             aes(x = DT_ph, y = panel_hrs),color = "red",size = 1) +
+# set plot_i and plot_f to control how many plots to print  
+max(sensor_data2$peak_n,na.rm = T)
+plot_i = 1
+plot_f = 10
+ggplot(data = filter(sensor_data2,!is.na(peak_n) & peak_n %in% plot_i:plot_f)) +
+  geom_point(aes(x = DateTime, y = panel_qrs,color = "Discharge"),size = 0.5) +
+  geom_point(aes(x = DateTime, y = panel_hrs,color = "Stage"),size = 0.5) +
+  geom_point(data = filter(matched_peaks2,peak_n %in% plot_i:plot_f),
+             aes(x =  DT_pq, y = panel_qrs,color = "Q Peak"),size = 1) +
+  geom_point(data = filter(matched_peaks2,peak_n %in% plot_i:plot_f),
+             aes(x = DT_ph, y = panel_hrs,color = "H Peak"),size = 1) +
+  scale_color_manual(name = '',
+                     values = model_color,
+                     labels =c("Discharge","H Peak","Q Peak","Stage")) +
   ylab("Rescaled h and q") +
   # xlab("Date") +
-  ggtitle(paste0(round(peak_window*15/60),"hour peak /",
-                 slope_percentile,"% slope cutoff / ",
-                 round(match_window*15/60),"hr match window")) +
+  # ggtitle(paste0(round(peak_window*15/60),"hour peak /",
+  #                slope_percentile,"% slope cutoff / ",
+  #                round(match_window*15/60),"hr match window")) +
   theme_minimal(base_size =12) +
   theme(strip.background = element_blank(),
         # strip.text.x = element_blank(),
@@ -291,23 +302,24 @@ ggplot(data = filter(sensor_data2,!is.na(peak_n))) +
         panel.grid.minor=element_blank(),
         axis.line = element_line(size = 0.5, linetype = "solid",
                                  colour = "black"))+
-  facet_wrap(cut_peak_n~peak_n ,scales = "free")
+  facet_wrap(cut_peak_n ~ peak_n, scales = "free")
 
 ################################ make plot of rating curve
 ggplot()+
-  geom_point(data = sensor_data, aes(x = q,y=h),color = "dark grey")+
-  geom_point(data= matched_peaks, aes(x = pq,y = ph),color = "red")+
-  ggtitle(paste0(round(peak_window*15/60),"hr peak /",
-                 slope_percentile,"% slope cutoff / ",
-                 round(match_window*15/60),"hr match window"))+
-  scale_color_manual(name = "", values = c("Lag Adjusted Algorithm Selected Peaks" = "red","raw data" = "dark grey"))+
+  geom_point(data = sensor_data, aes(x = q,y=h,color = "raw data"))+
+  geom_point(data= matched_peaks, aes(x = pq,y = ph,color = "Lag Adjusted Peaks"))+
+  # ggtitle(paste0(round(peak_window*15/60),"hr peak /",
+  #                slope_percentile,"% slope cutoff / ",
+  #                round(match_window*15/60),"hr match window"))+
+  scale_color_manual(name = '',
+                     values = c("red","dark grey"),
+                     labels =c("Lag Adjusted Peaks","raw data")) +
   # theme_minimal(base_size =18) +
   theme(legend.position="bottom")
 
 ################################ make plot of shift vs q plot
-shift_df <- matched_peaks %>%
-  select(-view_final) %>%
-  filter(!peak_n %in% c(15,19,20))
+shift_df <- matched_peaks
+# filter(!peak_n %in% c(15,19,20))
 
 ggplot()+
   geom_point(data = shift_df, aes(x = pq,y = shift),color = "red")+
@@ -316,7 +328,7 @@ ggplot()+
 
 ################################ filter to inspect time periods
 sens_filter2 <- filter(sensor_data2,between(DateTime,ymd("2018-11-29",tz=proj_tz),ymd("2018-12-01",tz=proj_tz)))
-match_filter <- filter(select(matched_peaks,-view_final),between(DT_pq,ymd("2018-11-29",tz=proj_tz),ymd("2018-12-01",tz=proj_tz)))
+match_filter <- filter(matched_peaks,between(DT_pq,ymd("2018-11-29",tz=proj_tz),ymd("2018-12-01",tz=proj_tz)))
 
 # sens_filter2_date <- filter(sensor_data2,peak_n == 12)
 sens_filter2 <- filter(sensor_data2,peak_n == 10)
@@ -344,6 +356,5 @@ ggplot(data = sens_filter2) +
         # panel.grid.minor=element_blank(),
         axis.line = element_line(size = 0.5, linetype = "solid",
                                  colour = "black"))
-
 
 
