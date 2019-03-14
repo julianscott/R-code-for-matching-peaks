@@ -283,9 +283,9 @@ plot_f = 10
 ggplot(data = filter(sensor_data2,!is.na(peak_n) & peak_n %in% plot_i:plot_f)) +
   geom_point(aes(x = DateTime, y = panel_qrs,color = "Discharge"),size = 0.5) +
   geom_point(aes(x = DateTime, y = panel_hrs,color = "Stage"),size = 0.5) +
-  geom_point(data = filter(matched_peaks2,peak_n %in% plot_i:plot_f),
+  geom_point(data = filter(matched_peaks,peak_n %in% plot_i:plot_f),
              aes(x =  DT_pq, y = panel_qrs,color = "Q Peak"),size = 1) +
-  geom_point(data = filter(matched_peaks2,peak_n %in% plot_i:plot_f),
+  geom_point(data = filter(matched_peaks,peak_n %in% plot_i:plot_f),
              aes(x = DT_ph, y = panel_hrs,color = "H Peak"),size = 1) +
   scale_color_manual(name = '',
                      values = model_color,
