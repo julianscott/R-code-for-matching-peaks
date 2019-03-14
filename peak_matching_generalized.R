@@ -16,9 +16,17 @@ pt_data <- pt_data %>%
 tmp <- pt_data %>%
   mutate(cut_ts = cut(DateTime,4))
 
+cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+names(cbPalette) <- as.character(expression(grey,orange,lightblue,green,yellow,darkblue,orange,purple))
+model_color <- cbPalette[c("darkblue","lightblue")]
+names(model_color) <-as.character(c("Stage","Discharge"))
+
 ggplot(data = tmp) +
-  geom_point(aes(x = DateTime, y = scales::rescale(h)),color = "grey") +       # rescale standardizes both datasets to 0:1.
-  geom_point(aes(x = DateTime, y = scales::rescale(q)*1.5),color = "black") +  # amplify by multiplication
+  geom_point(aes(x = DateTime, y = scales::rescale(h),color = "Stage")) +       # rescale standardizes both datasets to 0:1.
+  geom_point(aes(x = DateTime, y = scales::rescale(q)*1.5,color = "Discharge")) +  # amplify by multiplication
+  scale_color_manual(name = '',
+                     values = model_color,
+                     labels = c('Stage','Discharge')) +
   ylab("Rescaled q and h") +
   xlab("Date") +
   # theme_void(base_size =24)
@@ -89,7 +97,7 @@ override_df <- data.frame(DT_pq = DT_pq_m1,DT_ph = DT_ph_m1)
 pt_data4 <- .override_fun(dt_df = override_df,record_df = pt_data4)
 
 match_window = 23 
-search_direction = "right"
+search_direction = "left"
 pt_data5 <- .match_test(df = pt_data4,
                         # q_logi = "q_peak_logi",
                         # h_logi = "h_peak_logi",
@@ -300,6 +308,7 @@ ggplot()+
 shift_df <- matched_peaks %>%
   select(-view_final) %>%
   filter(!peak_n %in% c(15,19,20))
+
 ggplot()+
   geom_point(data = shift_df, aes(x = pq,y = shift),color = "red")+
   theme(legend.position="bottom")
