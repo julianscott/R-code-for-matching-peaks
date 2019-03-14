@@ -13,20 +13,21 @@ lapply(packages,library,character.only=TRUE)
 #### PT data should have two columns, datetime and stage, in that order
 ####################################################
 # choose.files()
-setwd("E:\\_DoD\\_Camp_Pendleton_Survey\\Hydrology\\Pressure_Transducer_data\\PT_data_Time_Flow_Alignment_work\\031219_fullrecord\\")
-# setwd("E:\\_DoD\\_Camp_Pendleton_Survey\\R_code\\Analysis\\Beasley")
+# setwd("E:\\_DoD\\_Camp_Pendleton_Survey\\Hydrology\\Pressure_Transducer_data\\PT_data_Time_Flow_Alignment_work\\031219_fullrecord\\")
+setwd("E:\\_DoD\\_Camp_Pendleton_Survey\\R_code\\Analysis\\Beasley")
 PTfiles <- list.files(pattern = "*.csv")
 PTfiles
 # length(PTfiles)
 
 # PT stream sensor files should have two columns, 1=datetime,2=stage
-PT <- read.csv(PTfiles[[3]],header=T,stringsAsFactors = FALSE)
+PT <- read.csv(PTfiles[[2]],header=T,stringsAsFactors = FALSE)
 colnames(PT) 
 
 # standardize column names
 colnames(PT) <- c("DateTime","h")
 
-proj_tz = "America/Los_Angeles" # 
+# proj_tz = "America/Los_Angeles" # 
+proj_tz = "America/Phoenix" # 
 
 # Format datetimes. Check input date data - is it mdy_hm or ymd_hm? change to match
 head(PT)
@@ -61,7 +62,7 @@ pt_data <- PT
 
 #### Code for reading in 15 minuted data from usgs gages
 
-setwd("E:\\_DoD\\_Camp_Pendleton_Survey\\Hydrology\\WSE_data\\asof032018")
+# setwd("E:\\_DoD\\_Camp_Pendleton_Survey\\Hydrology\\WSE_data\\asof032018")
 
 # read in flow data direct from USGS website
 # readNWISuv acquires the current/historical observations (15 minute data)
@@ -80,7 +81,7 @@ setwd("E:\\_DoD\\_Camp_Pendleton_Survey\\Hydrology\\WSE_data\\asof032018")
 
 # 11044300 is fallbrook
 # 09506000 is beasley
-gage1_raw <- readNWISuv(site = '11044300', parameterCd="00060",
+gage1_raw <- readNWISuv(site = '09506000', parameterCd="00060",
                         startDate = date(PT_start),
                         endDate = date(PT_end),
                         tz = proj_tz)
@@ -108,8 +109,8 @@ colnames(gage2) <- c("site_n","DateTime","gage2_cfs","tz")
 # by 15 minute interval, I create my own sequence. Importantly, 
 # this method accounts for daylight savings time (e.g. observe behaviour
 # in mid march and early november)
-dateseq <- seq(PT_start,
-               PT_end, 
+dateseq <- seq(min(gage1$DateTime),
+               max(gage1$DateTime), 
                by = '15 mins')
 
 # create new dataframe, with my dateseq as the first column
