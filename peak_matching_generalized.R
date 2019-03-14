@@ -119,7 +119,7 @@ if(search_direction == "left"){
            sdir = search_direction,
            pq_row = if_else(!is.na(match_row23),
                             rnum + match_row23 -1L,
-                            NA_integer_))
+                            NA_real_))
 } else {
   pt_data_F <- pt_data_F %>%
     mutate(rnum = row_number(),
