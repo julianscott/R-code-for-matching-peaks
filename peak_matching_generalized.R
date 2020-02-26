@@ -92,30 +92,28 @@ ggplot(data = pt_data) +
 source("hydro_timeseries_analysis_generalized.R")
 
 # calculate a rolling average and rolling slope 
-# define the window for the calculation
-slope_window = 3 # where 1 = 15 minutes
+
+pt_data2 <- pt_data %>%
+  as_tbl_time(index = DateTime) %>%
+  mutate(h_slope = .rolling_lm(x = DateTime, y = h), # sliding elevation slope (dh/dt), for value + previous 4 measures (right aligned)
+         h_msign = ifelse(h_slope > 0, "+","-" ),     # sign of the elevation slope
+         q_slope = .rolling_lm(x = DateTime, y = q), # sliding q slope (dq/dt), for value + previous 4 measures (right aligned)
+         q_msign = ifelse(q_slope > 0, "+","-" ))     # ssign of the q slope
+
+# identify peaks in h and q
+# For example dataset, each row is 15 minutes, so  1=15 minutes, 2=30 minutes, etc.
 # 23 is 5.75 hrs
 # 32 is 8 hours
 # 45 is 11.25 hrs
 # 95 is 23.45 hrs
 # 479 os ~5 days
 # 2879 is ~30 days
-pt_data2 <- pt_data %>%
-  as_tbl_time(index = DateTime) %>%
-  mutate(#h_mean = .sliding_mean(h,slope_window),      # sliding elevation mean, for value + previous 4 measures (right aligned)
-         h_slope = .rolling_lm(x = DateTime, y = h), # sliding elevation slope (dh/dt), for value + previous 4 measures (right aligned)
-         h_msign = ifelse(h_slope > 0, "+","-" ),     # sign of the elevation slope
-         # q_mean = .sliding_mean(q,slope_window),      # sliding q mean , for value + previous 4 measures (right aligned)
-         q_slope = .rolling_lm(x = DateTime, y = q), # sliding q slope (dq/dt), for value + previous 4 measures (right aligned)
-         q_msign = ifelse(q_slope > 0, "+","-" ))     # ssign of the q slope
-
-# identify peaks in h and q
 peak_window = 32
 pt_data3 <- .peak_fun(df = pt_data2,
                       measure = c("h","q"),
                       date = "DateTime",
                       peak_window = peak_window)
-head(filter(pt_data3,!is.na(DateTime)))
+# head(filter(pt_data3,!is.na(DateTime)))
 # produce a plot showing hydrograph of stage and discharge, with peaks marked by the peak_fun function.
 # Plotting function plot_data3_fun takes pt_data3, the number of facets you want to split the time series
 # into, and the peak_window as arguments. It returns both the plot and the plot data as a list.

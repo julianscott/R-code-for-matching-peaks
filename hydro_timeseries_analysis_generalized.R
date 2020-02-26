@@ -195,13 +195,14 @@ unlist = TRUE)
   names(model_color) <-as.character(c("Discharge","Stage","Q Peak","H Peak"))
   
   plot_data3 = data %>%
+    mutate(cut_ts = cut(DateTime,facet_count)) %>%
+    group_by(cut_ts) %>%
     mutate(q_rs = scales::rescale(q),
-           h_rs = scales::rescale(h),
-           cut_ts = cut(DateTime,facet_count))
+           h_rs = scales::rescale(h))
   
   plot_return = ggplot(data = plot_data3) + 
-    geom_point(aes(x = DateTime, y = h_rs,color = "Stage"),size = 0.5) +       
-    geom_point(aes(x = DateTime, y = q_rs,color = "Discharge"),size = 0.5) +  
+    geom_line(aes(x = DateTime, y = h_rs,color = "Stage"),size = 0.5) +       
+    geom_line(aes(x = DateTime, y = q_rs,color = "Discharge"),size = 0.5) +  
     geom_point(data = filter(plot_data3,h_peak_logi == TRUE),
                aes(x = DateTime, y = h_rs,color = "H Peak"),size = 1) +
     geom_point(data = filter(plot_data3,q_peak_logi == TRUE),
