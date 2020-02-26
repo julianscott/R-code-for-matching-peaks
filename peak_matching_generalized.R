@@ -1,53 +1,105 @@
 ###############################################################################
-# Start code for identifying peaks, adjusting peaks for lag/lead for upstream/downstream timestamps, 
+# Code for identifying peaks, adjusting peaks for lag/lead for upstream/downstream timestamps, 
 # and plotting for QAQC
+
+
+packages <- c("RCurl","oce","roll","RcppRoll","dataRetrieval","formattable","data.table","tibbletime","hydroTSM","xtable","tidyverse","chron","lubridate","ggpubr","segmented","stargazer","zoo","readxl")
+
+# Check to see if each is installed, and install if not.
+if (length(setdiff(packages, rownames(installed.packages()))) > 0) {
+  install.packages(setdiff(packages, rownames(installed.packages())))
+}
+
+# now, use the lapply function to load the installed libraries in the packages list
+lapply(packages,library,character.only=TRUE)
+
+
+# Download synced up pressure stage and discharge timeseries data. 
+# Or, read in your own synced up data. Format of your own data must match example data. 
 
 
 # To start this script, the input files are
 # 1. pt_data from the results of sensor_and_gage_sync_1sensor_general.R
 #  OR csv with three columns, datetime, stage, and q
 
-# Add a auxillary columns like log value, change units, etc
+pt_data <- fread("https://raw.githubusercontent.com/julianscott/R-code-for-matching-peaks/master/synced_Q_and_stage_timeseries.csv")
+head(pt_data)
+summary(pt_data)
+
+# Ensure datetime data is formatted correctly. For the example, its year, month, day, 
+# hour, minute, second in the "America/Los_Angeles" time zone. 
+# Note, convieniently, lubridate accounts for daylight saving time.
+# ?tz
+# check OlsonNames for list of valid time zones
+# OlsonNames(tzdir = NULL)
+
+proj_tz = "America/Los_Angeles" #
+pt_data$DateTime <- lubridate::ymd_hms(pt_data$DateTime,tz = proj_tz)
+
 pt_data <- pt_data %>%
   dplyr::select(DateTime,h,q_cfs) %>%
-  mutate(q = q_cfs/(3.2808^3))
+  # Add column for discharge in cubic meters/second.
+  # Add a catagorical variable that splits the time series into chucks (for plotting)
+  mutate(q = q_cfs/(3.2808^3),
+        cut_ts = cut(DateTime,5)) %>%
+  # Group by cut_ts and add two columns to show h and q data rescaled to the range 0-1 (for visualizing peaks))
+  group_by(cut_ts) %>%
+  mutate(q_rs = scales::rescale(h),
+         h_rs = scales::rescale(q))
 
-# inspect q and h data before proceding
-tmp <- pt_data %>%
-  mutate(cut_ts = cut(DateTime,4))
 
+# Graphically inspect q and h data by plotting rescaled variables over time.
 cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
 names(cbPalette) <- as.character(expression(grey,orange,lightblue,green,yellow,darkblue,orange,purple))
-model_color <- cbPalette[c("darkblue","lightblue")]
+model_color <- cbPalette[c("grey","orange")]
 names(model_color) <-as.character(c("Stage","Discharge"))
 
-ggplot(data = tmp) +
-  geom_point(aes(x = DateTime, y = scales::rescale(h),color = "Stage")) +       # rescale standardizes both datasets to 0:1.
-  geom_point(aes(x = DateTime, y = scales::rescale(q)*1.5,color = "Discharge")) +  # amplify by multiplication
+ggplot(data = pt_data) +
+  # geom_point(aes(x = DateTime, y = h_rs,color = "Stage"),size = 1) +       
+  # geom_point(aes(x = DateTime, y = q_rs,color = "Discharge"),size = 1) +  
+  geom_line(aes(x = DateTime, y = h_rs,color = "Stage"),size = 1,alpha = 1) +       
+  geom_line(aes(x = DateTime, y = q_rs,color = "Discharge"),size = 1,alpha = 0.5) +  
   scale_color_manual(name = '',
-                     values = model_color,
-                     labels = c('Stage','Discharge')) +
+                     values = model_color) +
   ylab("Rescaled q and h") +
   xlab("Date") +
-  # theme_void(base_size =24)
+  theme(panel.background = element_rect(fill = "white"),
+        strip.background = element_blank(),
+        strip.text.x = element_blank(),
+        panel.grid.major=element_blank(),
+        panel.grid.minor=element_blank(),
+        axis.line = element_line(size = 0.5, linetype = "solid",
+                                 colour = "black")) +
   facet_wrap(~cut_ts ,scales = "free",ncol = 1)
 
 
+#### End section of script for reading and formating syced timeseries data 
+###########################################################################################
+#### Begin section for matchting peaks in the two timeseries
+
+# This strategy uses a 4 steps for matching peaks. Starting with the data table called pt_data,
+# after each step, the data table name is modified so that, at the end, we have pt_data2, pt_data3,
+# pt_data4, and pt_data5. Each consequtive data table is based on the previous table and has the same
+# number of rows. 
+
+# After the addition of a
 # Use a moving average functions (hydro_timeseries_analysis.R) to get sliding means, slopes, peaks, etc from
 # time series of q and h
 
-#23 is 5.75 hrs
+
+
+# source("E:\\_DoD\\_Camp_Pendleton_Survey\\R_code\\Analysis\\hydro_timeseries_analysis_generalized.R")
+source("hydro_timeseries_analysis_generalized.R")
+
+# calculate a rolling average and rolling slope 
+# define the window for the calculation
+slope_window = 3 # where 1 = 15 minutes
+# 23 is 5.75 hrs
 # 32 is 8 hours
 # 45 is 11.25 hrs
 # 95 is 23.45 hrs
 # 479 os ~5 days
 # 2879 is ~30 days
-
-source("E:\\_DoD\\_Camp_Pendleton_Survey\\R_code\\Analysis\\hydro_timeseries_analysis_generalized.R")
-
-# calculate a rolling average and rolling slope 
-# define the window for the calculation
-slope_window = 3 # where 1 = 15 minutes
 pt_data2 <- pt_data %>%
   as_tbl_time(index = DateTime) %>%
   mutate(#h_mean = .sliding_mean(h,slope_window),      # sliding elevation mean, for value + previous 4 measures (right aligned)
@@ -64,6 +116,14 @@ pt_data3 <- .peak_fun(df = pt_data2,
                       date = "DateTime",
                       peak_window = peak_window)
 head(filter(pt_data3,!is.na(DateTime)))
+# produce a plot showing hydrograph of stage and discharge, with peaks marked by the peak_fun function.
+# Plotting function plot_data3_fun takes pt_data3, the number of facets you want to split the time series
+# into, and the peak_window as arguments. It returns both the plot and the plot data as a list.
+get_plot_and_plotdata3 <- .plot_data3_fun(data = pt_data3,facet_count = 5,window = peak_window)
+plot_pt_data3 <- get_plot_and_plotdata3[1]
+plotdata_pt_data3 <- get_plot_and_plotdata3[2]
+# print plot
+plot_pt_data3
 
 # tmp <- filter(pt_data4,between(DateTime,ymd("2017-08-05",tz=proj_tz),ymd("2017-08-07",tz=proj_tz)))
 # View(select(tmp,DateTime,h_peak_logi,q_peak_logi))

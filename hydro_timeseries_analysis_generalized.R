@@ -188,6 +188,41 @@ unlist = TRUE)
   return(df2)
 }
 
+.plot_data3_fun <- function(data,facet_count,window){
+  cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+  names(cbPalette) <- as.character(expression(grey,orange,lightblue,green,yellow,darkblue,orange,purple))
+  model_color <- cbPalette[c("grey","lightblue","purple","orange")]
+  names(model_color) <-as.character(c("Discharge","Stage","Q Peak","H Peak"))
   
+  plot_data3 = data %>%
+    mutate(q_rs = scales::rescale(q),
+           h_rs = scales::rescale(h),
+           cut_ts = cut(DateTime,facet_count))
+  
+  plot_return = ggplot(data = plot_data3) + 
+    geom_point(aes(x = DateTime, y = h_rs,color = "Stage"),size = 0.5) +       
+    geom_point(aes(x = DateTime, y = q_rs,color = "Discharge"),size = 0.5) +  
+    geom_point(data = filter(plot_data3,h_peak_logi == TRUE),
+               aes(x = DateTime, y = h_rs,color = "H Peak"),size = 1) +
+    geom_point(data = filter(plot_data3,q_peak_logi == TRUE),
+               aes(x = DateTime, y = q_rs,color = "Q Peak"),size = 1) +
+    scale_color_manual(name = '',
+                       values = model_color)+
+    ylab("Rescaled h and q") +
+    xlab("Date") +
+    ggtitle(paste0(round(window*15/60,2)," hour peak"))+
+    # slope_percentile,"% slope cutoff / ",
+    # round(match_window*15/60),"hr match window")) +
+    theme_minimal(base_size =12) +
+    # theme_void(base_size =24) +
+    theme(strip.background = element_blank(), 
+          strip.text.x = element_blank(),
+          panel.grid.major=element_blank(),
+          panel.grid.minor=element_blank(),
+          axis.line = element_line(size = 0.5, linetype = "solid",
+                                   colour = "black")) +
+    facet_wrap(~cut_ts ,scales = "free",ncol = 1)
+  return(list(plot_return,plot_data3))
+}
 
 
