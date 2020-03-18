@@ -1,6 +1,6 @@
 ###############################################################################
-# Code for identifying peaks, adjusting peaks for lag/lead for upstream/downstream timestamps, 
-# and plotting for QAQC
+# Code for identifying peaks in two timeseries of data, matching peaks separated by 
+# a lag/lead for upstream/downstream timestamps, and plotting for QAQC
 
 
 packages <- c("RCurl","oce","roll","RcppRoll","dataRetrieval","formattable","data.table","tibbletime","hydroTSM","xtable","tidyverse","chron","lubridate","ggpubr","segmented","stargazer","zoo","readxl")
@@ -14,26 +14,28 @@ if (length(setdiff(packages, rownames(installed.packages()))) > 0) {
 lapply(packages,library,character.only=TRUE)
 
 
-# Download synced up pressure stage and discharge timeseries data. 
+# Input file is:
+# 1. A data frame (called 'pt_data' below) with three columns: datetime, stage, and q.
+#    File can be a user-provided csv or produced using the sensor_and_gage_sync_generalized script available at
+#    https://github.com/julianscott/R-code-for-matching-peaks
+
+
+# To run script, download pt_data download example synced up pressure stage and discharge timeseries data. 
 # Or, read in your own synced up data. Format of your own data must match example data. 
-
-
-# To start this script, the input files are
-# 1. pt_data from the results of sensor_and_gage_sync_1sensor_general.R
-#  OR csv with three columns, datetime, stage, and q
-
 pt_data <- fread("https://raw.githubusercontent.com/julianscott/R-code-for-matching-peaks/master/synced_Q_and_stage_timeseries.csv")
 head(pt_data)
 summary(pt_data)
 
-# Ensure datetime data is formatted correctly. For the example, its year, month, day, 
-# hour, minute, second in the "America/Los_Angeles" time zone. 
-# Note, convieniently, lubridate accounts for daylight saving time.
+# Ensure datetime data is formatted correctly. For the example, its year-month-day hour:minute:second 
+# in the "America/Los_Angeles" time zone. 
+
+# Note, convieniently, lubridate can handle daylight saving time.
 # ?tz
 # check OlsonNames for list of valid time zones
-# OlsonNames(tzdir = NULL)
+OlsonNames(tzdir = NULL)
 
 proj_tz = "America/Los_Angeles" #
+proj_tz = "Etc/GMT-8" #
 pt_data$DateTime <- lubridate::ymd_hms(pt_data$DateTime,tz = proj_tz)
 
 pt_data <- pt_data %>%
