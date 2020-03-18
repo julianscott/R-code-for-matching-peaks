@@ -52,7 +52,7 @@ colnames(PT) <- c("DateTime","h")
 # Daylight savings must be considered (the R package 'lubridate' is great for this).
 
 # Set time zone for the project. 
-proj_tz = "America/Los_Angeles" #
+proj_tz = "Etc/GMT+8" #
 # proj_tz = "America/Phoenix" # 
 # ?tz
 # check OlsonNames for list of valid time zones
