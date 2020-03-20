@@ -32,9 +32,9 @@ summary(pt_data)
 # Note, convieniently, lubridate can handle daylight saving time.
 # ?tz
 # check OlsonNames for list of valid time zones
-OlsonNames(tzdir = NULL)
+# OlsonNames(tzdir = NULL)
 
-proj_tz = "America/Los_Angeles" #
+# proj_tz = "America/Los_Angeles" #
 proj_tz = "Etc/GMT-8" #
 pt_data$DateTime <- lubridate::ymd_hms(pt_data$DateTime,tz = proj_tz)
 
@@ -59,8 +59,8 @@ names(model_color) <-as.character(c("Stage","Discharge"))
 ggplot(data = pt_data) +
   # geom_point(aes(x = DateTime, y = h_rs,color = "Stage"),size = 1) +       
   # geom_point(aes(x = DateTime, y = q_rs,color = "Discharge"),size = 1) +  
-  geom_line(aes(x = DateTime, y = h_rs,color = "Stage"),size = 1,alpha = 1) +       
-  geom_line(aes(x = DateTime, y = q_rs,color = "Discharge"),size = 1,alpha = 0.5) +  
+  geom_line(aes(x = DateTime, y = h_rs,color = "Stage"),size = 0.5,alpha = 1) +       
+  geom_line(aes(x = DateTime, y = q_rs,color = "Discharge"),size = 0.5,alpha = 1) +  
   scale_color_manual(name = '',
                      values = model_color) +
   ylab("Rescaled q and h") +
@@ -74,15 +74,40 @@ ggplot(data = pt_data) +
                                  colour = "black")) +
   facet_wrap(~cut_ts ,scales = "free",ncol = 1)
 
+# Same, but adjust h_rs and q_rs to scale overall, rather than within cut_ts
+pt_data %>% 
+  group_by() %>% # clears grouping variable
+  mutate(q_rs = scales::rescale(h),
+         h_rs = scales::rescale(q)) %>% 
+  ggplot() +
+    # geom_point(aes(x = DateTime, y = h_rs,color = "Stage"),size = 1) +       
+    # geom_point(aes(x = DateTime, y = q_rs,color = "Discharge"),size = 1) +  
+    geom_line(aes(x = DateTime, y = h_rs,color = "Stage"),size = 0.5,alpha = 1) +       
+    geom_line(aes(x = DateTime, y = q_rs,color = "Discharge"),size = 0.5,alpha = 1) +  
+    scale_color_manual(name = '',
+                       values = model_color) +
+    ylab("Rescaled q and h") +
+    xlab("Date") +
+    theme(panel.background = element_rect(fill = "white"),
+          strip.background = element_blank(),
+          strip.text.x = element_blank(),
+          panel.grid.major=element_blank(),
+          panel.grid.minor=element_blank(),
+          axis.line = element_line(size = 0.5, linetype = "solid",
+                                   colour = "black")) +
+    facet_wrap(~cut_ts ,scales = "free",ncol = 1)
+
 
 #### End section of script for reading and formating syced timeseries data 
 ###########################################################################################
-#### Begin section for matchting peaks in the two timeseries
+#### Begin section for matching peaks in the two timeseries
 
-# This strategy uses a 4 steps for matching peaks. Starting with the data table called pt_data,
-# after each step, the data table name is modified so that, at the end, we have pt_data2, pt_data3,
-# pt_data4, and pt_data5. Each consequtive data table is based on the previous table and has the same
-# number of rows. 
+# This strategy uses 4 steps for matching peaks. Starting with the dataframe called pt_data,
+# the dataframe name is modified after each step so that, at the end, we have objects called
+# pt_data2, pt_data3, pt_data4, and pt_data5. Each consequtive dataframe is based on the 
+# previous table and has the same number of rows, but additional columns. 
+
+# pt_data2 
 
 # After the addition of a
 # Use a moving average functions (hydro_timeseries_analysis.R) to get sliding means, slopes, peaks, etc from
@@ -95,6 +120,8 @@ source("hydro_timeseries_analysis_generalized.R")
 
 # calculate a rolling average and rolling slope 
 
+# define the window for the calculation. Assumes each data point is a 15 minute measurement.
+slope_window = 3 # where 1 = 15 minutes, for 15-minute data.
 pt_data2 <- pt_data %>%
   as_tbl_time(index = DateTime) %>%
   mutate(h_slope = .rolling_lm(x = DateTime, y = h), # sliding elevation slope (dh/dt), for value + previous 4 measures (right aligned)
@@ -110,26 +137,32 @@ pt_data2 <- pt_data %>%
 # 95 is 23.45 hrs
 # 479 os ~5 days
 # 2879 is ~30 days
-peak_window = 32
+peak_window = 32 # i.e., maximum values in an 8 hour moving window are flagged as 'peaks'
 pt_data3 <- .peak_fun(df = pt_data2,
                       measure = c("h","q"),
                       date = "DateTime",
                       peak_window = peak_window)
 # head(filter(pt_data3,!is.na(DateTime)))
-# produce a plot showing hydrograph of stage and discharge, with peaks marked by the peak_fun function.
-# Plotting function plot_data3_fun takes pt_data3, the number of facets you want to split the time series
+
+# Produce a plot showing hydrograph of stage and discharge, with peaks marked by the peak_fun function.
+# Plotting function 'plot_data3_fun' takes pt_data3, the number of facets you want to split the time series
 # into, and the peak_window as arguments. It returns both the plot and the plot data as a list.
 get_plot_and_plotdata3 <- .plot_data3_fun(data = pt_data3,facet_count = 5,window = peak_window)
 plot_pt_data3 <- get_plot_and_plotdata3[1]
 plotdata_pt_data3 <- get_plot_and_plotdata3[2]
+
 # print plot
 plot_pt_data3
 
 # tmp <- filter(pt_data4,between(DateTime,ymd("2017-08-05",tz=proj_tz),ymd("2017-08-07",tz=proj_tz)))
 # View(select(tmp,DateTime,h_peak_logi,q_peak_logi))
-# View(select(tmp,DateTime,h_peak_logi,q_peak_logi,h_slope_test,q_slope_test,match_row23))
+# View(select(tmp,DateTime,h_peak_logi,q_peak_logi,h_slope_test,q_slope_test,match_row))
 # View(tmp)
-# test if peaks occur in a window of time when abs(slope) was > 95% of all slopes (i.e. true peaks)
+
+# Test if the peaks marked in 'pt_data3' occur in a window of time (test window) 
+# when abs(slope) was > 95% of all slopes. The intent is to distinguish those peaks 
+# that are associated with dramatic increases (i.e. true peaks)
+
 test_window = 5
 slope_percentile = 0.95
 pt_data4 <- .peak_test(df = pt_data3,
@@ -138,26 +171,33 @@ pt_data4 <- .peak_test(df = pt_data3,
                        peak = c("h_peak_logi","q_peak_logi"),
                        date = "DateTime",
                        test_window = test_window)
-# for every marked peak h, look in the match_window for a marked peak q.
+
+get_plot_and_plotdata4 <- .plot_data4_fun(data = pt_data4,facet_count = 5,window = peak_window,groupscale = T)
+plot_pt_data4 <- get_plot_and_plotdata4[1]
+plotdata_pt_data4 <- get_plot_and_plotdata4[2]
+plot_pt_data4
+
+
+# For every marked peak h, look in the match_window for a marked peak q.
 # search_direction depends on whether the stream gage is upstream ("right"
 # or downstream ("left") of the sensor. If a marked q is found, return the 
 # number of rows separating the h peak from the q peak. 
 
-# q_logi and h_logi allow you to set witch logic variable to base the test on:
+# The variables q_logi and h_logi allow you to set which logic variable to base the test on:
 # q_peak_logi and h_peak_logi are tests of whether the measurement is the maximum in the window 
 # (i.e. a marked peak), while q_slope_test and h_slope_test are tests of whether the slopes in 
-# the hydro/stagegraph around the marked peak exceed the defined slope threshold (i.e. the latter 
-# is more stringent the former).
+# the graph around the marked peak exceed the defined slope threshold (i.e. the latter 
+# is usually more stringent the former).
 
 # add in overrides if desired
 # manual additions
-DT_pq_m1 <- ymd_hm(c("2019-02-14 15:15","2019-02-14 09:15"),tz=proj_tz)
-DT_ph_m1 <- ymd_hm(c("2019-02-14 15:30","2019-02-14 09:30"),tz=proj_tz)
-override_df <- data.frame(DT_pq = DT_pq_m1,DT_ph = DT_ph_m1)
-pt_data4 <- .override_fun(dt_df = override_df,record_df = pt_data4)
+# DT_pq_m1 <- ymd_hm(c("2019-02-14 15:15","2019-02-14 09:15"),tz=proj_tz)
+# DT_ph_m1 <- ymd_hm(c("2019-02-14 15:30","2019-02-14 09:30"),tz=proj_tz)
+# override_df <- data.frame(DT_pq = DT_pq_m1,DT_ph = DT_ph_m1)
+# pt_data4 <- .override_fun(dt_df = override_df,record_df = pt_data4)
 
 match_window = 23 
-search_direction = "left"
+search_direction = "left" # stream gage is upstream ("right") or downstream ("left") of the sensor
 pt_data5 <- .match_test(df = pt_data4,
                         # q_logi = "q_peak_logi",
                         # h_logi = "h_peak_logi",
@@ -168,13 +208,12 @@ pt_data5 <- .match_test(df = pt_data4,
                         test_window = match_window)
 
 # when a marked peak in h does not have a matching marked peak q, -Inf is produced. Replace with NA
-pt_data5 <- mutate(pt_data5,match_row23 = replace(match_row23,match_row23 == -Inf,NA))
-
-# View(filter(pt_data5,date(DateTime) == "2019-02-14"))
+pt_data5 <- mutate(pt_data5,match_row = replace(match_row,match_row == -Inf,NA))
 
 # remove heading and tailing padded NA values used during rolling average calcs
 pt_data_F <- pt_data5[!is.na(pt_data5[,"DateTime"]),]
 
+# Now we need to identify 
 # Depending on whether the search direction is left (sensor lags the downstream stream gage) 
 # or right (sensor leads the upstream stream gage)), this code produces three new columns:
 # 1. rnum is the row number of the datetime vector that will stay fixed to the stage record
@@ -185,26 +224,23 @@ if(search_direction == "left"){
   pt_data_F <- pt_data_F %>%
     mutate(rnum = row_number(),
            sdir = search_direction,
-           pq_row = if_else(!is.na(match_row23),
-                            rnum + match_row23 -1L,
+           pq_row = if_else(!is.na(match_row),
+                            rnum + match_row -1L,
                             NA_real_))
 } else {
   pt_data_F <- pt_data_F %>%
     mutate(rnum = row_number(),
            sdir = search_direction,
-           pq_row = if_else(!is.na(match_row23),
-                            rnum - as.integer(match_window-match_row23),
+           pq_row = if_else(!is.na(match_row),
+                            rnum - as.integer(match_window-match_row),
                             NA_integer_)) 
 }
 
 # scale q and h for comparing peaks and cut time series for viewing
 pt_data_F <- pt_data_F %>%
-  mutate_at(vars(c(h,q)),funs(rs = scales::rescale)) %>%
-  mutate(cut_ts = cut(DateTime,6))
-
-# replace slope sign with peak designation in pt_data_F 
-pt_data_F$h_msign[pt_data_F$h_peak_logi == TRUE] <- paste0(round(peak_window*15/60/24)," Day Peak")
-pt_data_F$q_msign[pt_data_F$q_peak_logi == TRUE] <-  paste0(round(peak_window*15/60/24)," Day Peak")
+  mutate(q_rs = scales::rescale(q),
+         h_rs = scales::rescale(h),
+         cut_ts = cut(DateTime,6))
 
 # get rows with peak discharge measurments
 pq_rows <- pt_data_F[which(!is.na(pt_data_F$pq_row)),]$pq_row
@@ -218,7 +254,7 @@ q_peaks <- select(pt_data_F,rnum,DateTime,q_slope_test,q,q_rs) %>%
   rename(pq_row = rnum,DT_pq = DateTime,pq = q,pq_rs = q_rs) %>%
   select(pq_row,DT_pq,pq,pq_rs)
   
-# build dataframe of h peaks and q peaks, with two date columns, one for the h and one for the lag/lead q.
+# Build dataframe of h peaks and q peaks, with two date columns, one for the h and one for the lag/lead q.
 # this is accomplished using the inner_join with the q_peaks table based on the pq_row column.
 # Rename stage columns to indicate peak status.
 matched_peaks <- filter(pt_data_F,!is.na(pq_row)) %>%
@@ -279,7 +315,7 @@ DT_table <- sensor_data %>%
 #  to nrow(DT_table) * nrow(peak_interval), with all combinations of (DateTime) 
 #  and view_final. Then, test whether each DateTime is in the given view_final,
 #  mark those rows where the DateTime %within% view_final == TRUE, drop those that are not.
-#  This effectively identifies which view_final each peak is within.  Join the resulting table
+#  This effectively identifies a viewing window for each peak.  Join the resulting table
 #  to sensor_data.
 
 sensor_data2 <- crossing(DT_table,peak_interval) %>%
@@ -309,7 +345,7 @@ names(cbPalette) <- as.character(expression(grey,orange,lightblue,green,yellow,d
 model_color <- cbPalette[c("grey","lightblue","purple","orange")]
 names(model_color) <-as.character(c("Discharge","Stage","Q Peak","H Peak"))
 
-ggplot(data = sensor_dat) + 
+ggplot(data = sensor_data) + 
   geom_point(aes(x = DateTime, y = q_rs,color = "Discharge"),size = 0.5) +
   geom_point(aes(x = DateTime, y = h_rs,color = "Stage"),size = 0.5) +
   geom_point(data = matched_peaks,
@@ -339,7 +375,7 @@ ggplot(data = sensor_dat) +
 # set plot_i and plot_f to control how many plots to print  
 max(sensor_data2$peak_n,na.rm = T)
 plot_i = 1
-plot_f = 10
+plot_f = 1
 ggplot(data = filter(sensor_data2,!is.na(peak_n) & peak_n %in% plot_i:plot_f)) +
   geom_point(aes(x = DateTime, y = panel_qrs,color = "Discharge"),size = 0.5) +
   geom_point(aes(x = DateTime, y = panel_hrs,color = "Stage"),size = 0.5) +
