@@ -224,7 +224,8 @@ unlist = TRUE)
   names(model_color) <-as.character(c("Discharge","Stage","Q Peak","H Peak"))
   
   plot_data3 = data %>%
-    mutate(cut_ts = cut(DateTime,facet_count)) %>%
+    mutate(cut_ts = cut(DateTime,facet_count),
+           cut_ts = forcats::fct_explicit_na(cut_ts)) %>%
     group_by(cut_ts) %>%
     mutate(q_rs = scales::rescale(q),
            h_rs = scales::rescale(h))
@@ -258,36 +259,89 @@ unlist = TRUE)
 .plot_data4_fun <- function(data,facet_count,window,groupscale=FALSE){
   cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7","#FF0000")
   names(cbPalette) <- as.character(expression(grey,orange,lightblue,green,yellow,darkblue,orange,purple,red))
-  model_color <- cbPalette[c("grey","lightblue","purple","orange","red","red")]
+  model_color <- cbPalette[c("grey","lightblue","purple","orange","orange","purple")]
   names(model_color) <-as.character(c("Discharge","Stage","Q Peak","H Peak","H Peak Slope Test","Q Peak Slope Test"))
+  
+  model_size <- c(0.5,0.5,1,1,3,3)
+  names(model_size) <-as.character(c("Discharge","Stage","Q Peak","H Peak","H Peak Slope Test","Q Peak Slope Test"))
+  
+  model_shape <- c(16,16,16,16,1,1)
+  names(model_shape) <-as.character(c("Discharge","Stage","Q Peak","H Peak","H Peak Slope Test","Q Peak Slope Test"))
   
   if(groupscale == TRUE){
     plot_data4 = data %>%
-        mutate(cut_ts = cut(DateTime,facet_count)) %>%
+        mutate(cut_ts = cut(DateTime,facet_count),
+               cut_ts = forcats::fct_explicit_na(cut_ts)) %>%
         group_by(cut_ts) %>%
         mutate(q_rs = scales::rescale(q),
                h_rs = scales::rescale(h))
   } else {
     plot_data4 = data %>%
-      mutate(cut_ts = cut(DateTime,facet_count)) %>%
+      mutate(cut_ts = cut(DateTime,facet_count),
+             cut_ts = forcats::fct_explicit_na(cut_ts)) %>%
       group_by() %>%
       mutate(q_rs = scales::rescale(q),
              h_rs = scales::rescale(h))
   }
   
-  plot_return = ggplot(data = plot_data4) + 
-    geom_line(aes(x = DateTime, y = h_rs,color = "Stage"),size = 0.5) +       
-    geom_line(aes(x = DateTime, y = q_rs,color = "Discharge"),size = 0.5) +  
+
+  
+  plot_data4 <- plot_data4 %>% 
+    group_by() %>% 
+    select(DateTime,h,q,h_peak_logi,q_peak_logi,h_slope_test,q_slope_test) %>% 
+    mutate(q_peakmark = if_else(q_slope_test == TRUE, "peak_slope",
+                              if_else(q_peak_logi == TRUE,"peak","q")),
+         h_peakmark = if_else(h_slope_test == TRUE, "peak_slope",
+                              if_else(h_peak_logi == TRUE,"peak","h"))) %>% 
+    select(-c(h_peak_logi, q_peak_logi, h_slope_test, q_slope_test)) %>% 
+    pivot_longer(cols = c(h,q),names_to = "measure",values_to = "value") %>% 
+    mutate(cut_ts = forcats::fct_explicit_na(cut(DateTime,facet_count))) %>% 
+    group_by(cut_ts,measure) %>% 
+    mutate(sval = scales::rescale(value)) 
+    
+
+  ggplot() +
+    geom_line(data = plot_data4,aes(x = DateTime, y = sval,
+      color = interaction(q_peakmark,h_peakmark)))
+    ))
+  
+  plot_return <- ggplot(data = plot_data4) + 
+    geom_line(aes(x = DateTime, y = h_rs,
+                  color = "Stage",
+                  size = "Stage")) +       
+    geom_line(aes(x = DateTime, y = q_rs,
+                  color = "Discharge",
+                  size = "Discharge")) +  
     geom_point(data = filter(plot_data4,h_peak_logi == TRUE),
-               aes(x = DateTime, y = h_rs,color = "H Peak"),size = 1) +
+               aes(x = DateTime, y = h_rs,
+                   color = "H Peak",
+                   size = "H Peak",
+                   shape = "H Peak")) +
     geom_point(data = filter(plot_data4,q_peak_logi == TRUE),
-               aes(x = DateTime, y = q_rs,color = "Q Peak"),size = 1) +
+               aes(x = DateTime, y = q_rs,
+                   color = "Q Peak",
+                   size = "Q Peak",
+                   shape = "Q Peak")) +
     geom_point(data = filter(plot_data4,h_slope_test == TRUE),
-               aes(x = DateTime, y = h_rs,color = "H Peak Slope Test"),size = 3,shape = 1) +
+               aes(x = DateTime, y = h_rs,
+                   color = "H Peak Slope Test",
+                   size = "H Peak Slope Test",
+                   shape = "H Peak Slope Test")) +
     geom_point(data = filter(plot_data4,q_slope_test == TRUE),
-               aes(x = DateTime, y = q_rs,color = "Q Peak Slope Test"),size = 3,shape = 1) +
+               aes(x = DateTime, y = q_rs,
+                   color = "Q Peak Slope Test",
+                   size = "Q Peak Slope Test",
+                   shape = "Q Peak Slope Test")) +
     scale_color_manual(name = '',
                        values = model_color)+
+    scale_size_manual(name = '',
+                       values = model_size,
+                      guide = guide_legend(override.aes = list(
+                        # linetype = c(rep("blank", 7), "solid", "dashed"),
+                        size = c(NA,NA,1,1,3,3))))+
+    scale_shape_manual(name = '',
+                       values = model_shape)+
+
     ylab("Rescaled h and q") +
     xlab("Date") +
     ggtitle(paste0(round(window*15/60,2)," hour peak"))+
@@ -312,24 +366,6 @@ unlist = TRUE)
   model_color <- cbPalette[c("grey","lightblue","purple","orange","red","red")]
   names(model_color) <-as.character(c("Discharge","Stage","Q Peak","H Peak","H Peak matched","Q Peak matched"))
   
-  # if(search_dir == "left"){
-  #   plot_data5 <- plot_data5 %>%
-  #     mutate(rnum = row_number(),
-  #            sdir = search_dir,
-  #            pq_row = if_else(!is.na(match_row), #    For the given row, if match_row is not NA, 
-  #                             rnum + match_row -1L, # then add the row number to the number of 
-  #                             NA_real_))#             rows separating the row and the row with  
-  #   #             the matched peak (match_row), minus 1. Else, NA.
-  #   
-  # } else if(search_dir == "right") {
-  #   plot_data5 <- plot_data5 %>%
-  #     mutate(rnum = row_number(),
-  #            sdir = search_dir,
-  #            pq_row = if_else(!is.na(match_row), # Just like above, but modified for searching 'right'
-  #                             rnum - as.integer(match_window-match_row),
-  #                             NA_integer_)) 
-  # }
-  
   # rows noted as matched Q peaks
   pqrows <- plot_data5[filter(plot_data5,!is.na(pq_row))$pq_row,]
   # rows noted as matched H peaks
@@ -349,13 +385,15 @@ unlist = TRUE)
   # add plotting groups and scale
   if(groupscale == TRUE){
     tmp <- tmp %>%
-      mutate(cut_ts = cut(DateTime,facet_count)) %>%
+      mutate(cut_ts = cut(DateTime,facet_count),
+             cut_ts = forcats::fct_explicit_na(cut_ts)) %>%
       group_by(cut_ts) %>%
       mutate(q_rs = scales::rescale(q),
              h_rs = scales::rescale(h))
   } else if(groupscale == FALSE){
     tmp <- tmp %>%
-      mutate(cut_ts = cut(DateTime,facet_count)) %>%
+      mutate(cut_ts = cut(DateTime,facet_count),
+             cut_ts = forcats::fct_explicit_na(cut_ts)) %>%
       group_by() %>%
       mutate(q_rs = scales::rescale(q),
              h_rs = scales::rescale(h))
