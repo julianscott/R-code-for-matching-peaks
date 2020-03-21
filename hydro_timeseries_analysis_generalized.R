@@ -257,26 +257,16 @@ unlist = TRUE)
 }
 
 .plot_data4_fun <- function(data,facet_count,window,groupscale=FALSE){
-  cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7","#FF0000")
-  names(cbPalette) <- as.character(expression(grey,orange,lightblue,green,yellow,darkblue,orange,purple,red))
-  model_color <- cbPalette[c("grey","lightblue","purple","orange","orange","purple")]
-  names(model_color) <-as.character(c("Discharge","Stage","Q Peak","H Peak","H Peak Slope Test","Q Peak Slope Test"))
-  
-  model_size <- c(0.5,0.5,1,1,3,3)
-  names(model_size) <-as.character(c("Discharge","Stage","Q Peak","H Peak","H Peak Slope Test","Q Peak Slope Test"))
-  
-  model_shape <- c(16,16,16,16,1,1)
-  names(model_shape) <-as.character(c("Discharge","Stage","Q Peak","H Peak","H Peak Slope Test","Q Peak Slope Test"))
-  
+  plot_data4 <- filter(data,!is.na(DateTime))
   if(groupscale == TRUE){
-    plot_data4 = data %>%
+    plot_data4 = plot_data4 %>%
         mutate(cut_ts = cut(DateTime,facet_count),
                cut_ts = forcats::fct_explicit_na(cut_ts)) %>%
         group_by(cut_ts) %>%
         mutate(q_rs = scales::rescale(q),
                h_rs = scales::rescale(h))
   } else {
-    plot_data4 = data %>%
+    plot_data4 = plot_data4 %>%
       mutate(cut_ts = cut(DateTime,facet_count),
              cut_ts = forcats::fct_explicit_na(cut_ts)) %>%
       group_by() %>%
@@ -285,63 +275,47 @@ unlist = TRUE)
   }
   
 
-  
+  # wrangle for plotting 
+  # 3/21/20 - colors etc are wrong still - q peaks are on h_rs line
   plot_data4 <- plot_data4 %>% 
     group_by() %>% 
-    select(DateTime,h,q,h_peak_logi,q_peak_logi,h_slope_test,q_slope_test) %>% 
-    mutate(q_peakmark = if_else(q_slope_test == TRUE, "peak_slope",
-                              if_else(q_peak_logi == TRUE,"peak","q")),
-         h_peakmark = if_else(h_slope_test == TRUE, "peak_slope",
-                              if_else(h_peak_logi == TRUE,"peak","h"))) %>% 
+    select(DateTime,cut_ts,h_rs,q_rs,h,q,h_peak_logi,q_peak_logi,h_slope_test,q_slope_test) %>% 
+    mutate(q_peakmark = if_else(q_slope_test == TRUE, "q peak slope",
+                              if_else(q_peak_logi == TRUE,"q peak","q")),
+         h_peakmark = if_else(h_slope_test == TRUE, "h peak slope",
+                              if_else(h_peak_logi == TRUE,"h peak","h"))) %>% 
     select(-c(h_peak_logi, q_peak_logi, h_slope_test, q_slope_test)) %>% 
-    pivot_longer(cols = c(h,q),names_to = "measure",values_to = "value") %>% 
-    mutate(cut_ts = forcats::fct_explicit_na(cut(DateTime,facet_count))) %>% 
-    group_by(cut_ts,measure) %>% 
-    mutate(sval = scales::rescale(value)) 
-    
+    pivot_longer(cols = c(h_rs,q_rs),names_to = c("measure"),values_to = "value") %>% 
+    pivot_longer(c(q_peakmark,h_peakmark),names_to = "mark",values_to = "markvalue") %>% 
+    mutate(markvalue = if_else(is.na(markvalue),measure,markvalue))%>% 
+    filter(!is.na(DateTime)) %>% 
+    filter((grepl("q",mark) & grepl("q",markvalue)) | (grepl("h",mark) & grepl("h",markvalue)))
 
-  ggplot() +
-    geom_line(data = plot_data4,aes(x = DateTime, y = sval,
-      color = interaction(q_peakmark,h_peakmark)))
-    ))
+ 
+  cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7","#FF0000")
+  names(cbPalette) <- as.character(expression(grey,orange,lightblue,green,yellow,darkblue,orange,purple,red))
+  model_color <- cbPalette[c("grey","lightblue","purple","orange","orange","purple")]
+  names(model_color) <-as.character(c("q_rs","h_rs","q peak","h peak","h peak slope","q peak slope"))
   
-  plot_return <- ggplot(data = plot_data4) + 
-    geom_line(aes(x = DateTime, y = h_rs,
-                  color = "Stage",
-                  size = "Stage")) +       
-    geom_line(aes(x = DateTime, y = q_rs,
-                  color = "Discharge",
-                  size = "Discharge")) +  
-    geom_point(data = filter(plot_data4,h_peak_logi == TRUE),
-               aes(x = DateTime, y = h_rs,
-                   color = "H Peak",
-                   size = "H Peak",
-                   shape = "H Peak")) +
-    geom_point(data = filter(plot_data4,q_peak_logi == TRUE),
-               aes(x = DateTime, y = q_rs,
-                   color = "Q Peak",
-                   size = "Q Peak",
-                   shape = "Q Peak")) +
-    geom_point(data = filter(plot_data4,h_slope_test == TRUE),
-               aes(x = DateTime, y = h_rs,
-                   color = "H Peak Slope Test",
-                   size = "H Peak Slope Test",
-                   shape = "H Peak Slope Test")) +
-    geom_point(data = filter(plot_data4,q_slope_test == TRUE),
-               aes(x = DateTime, y = q_rs,
-                   color = "Q Peak Slope Test",
-                   size = "Q Peak Slope Test",
-                   shape = "Q Peak Slope Test")) +
+  model_size <- c(0,0,2,2,4,4)
+  names(model_size) <-as.character(c("q_rs","h_rs","q peak","h peak","h peak slope","q peak slope"))
+  
+  model_shape <- c(NA,NA,16,16,1,1)
+  names(model_shape) <-as.character(c("q_rs","h_rs","q peak","h peak","h peak slope","q peak slope"))
+    
+  plot_return <- ggplot() +
+    geom_line(data = tmp,aes(x = DateTime, y = value,color = measure),size = 0.5) +
+    geom_point(data = tmp,aes(x = DateTime, y = value,
+                              color = markvalue,
+                              size = markvalue,
+                              shape = markvalue)) +
     scale_color_manual(name = '',
-                       values = model_color)+
+                       values = model_color) +
     scale_size_manual(name = '',
-                       values = model_size,
-                      guide = guide_legend(override.aes = list(
-                        # linetype = c(rep("blank", 7), "solid", "dashed"),
-                        size = c(NA,NA,1,1,3,3))))+
+                      values = model_size) +
     scale_shape_manual(name = '',
-                       values = model_shape)+
-
+                       values = model_shape) +
+    
     ylab("Rescaled h and q") +
     xlab("Date") +
     ggtitle(paste0(round(window*15/60,2)," hour peak"))+
@@ -356,7 +330,7 @@ unlist = TRUE)
           axis.line = element_line(size = 0.5, linetype = "solid",
                                    colour = "black")) +
     facet_wrap(~cut_ts ,scales = "free",ncol = 1)
-  return(list(plot_return,plot_data4))
+    return(list(plot_return,plot_data4))
 }
 
 
