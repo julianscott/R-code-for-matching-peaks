@@ -1,45 +1,17 @@
 # hydrologic record time series analysis
 
 
-# .peak_ID <- function(x){
-#   return()
-# }
-
-# .sliding_mean <- function(measure,window){
-#   y = tryCatch({rollapply(measure,width=window,FUN = mean,fill = NA,align = "right")},error = function(e){NA})
-#   return(y)
-# }
-
 .sliding_mean <- function(measure,window){
   y = rollapply(measure,width=window,FUN = mean,fill = NA,align = "right")
   return(y)
 }
 
 
-# y = c(1,2,3)
-# x = c(NA,NA,NA)
-
-.rolling_lm <- rollify(.f = function(x = DateTime,y) {
+.rolling_lm <- rollify(.f = function(x = DateTime,y) 
+  {
   tryCatch({coef(lm(y ~ x))[2]},error = function(e){NA})
-},
-window = slope_window,
-na_value = NA,
-unlist = TRUE)
-
-#  This is really neat way to get all of the rolling regression data 
-#  But we only need the coef. 
-#  See "http://lenkiefer.com/2017/10/26/predicting-recessions-with-dynamic-model-averaging/"
-# tmp <- as_tbl_time(tmp,index = datetime7)
-# tmp2 <- tmp %>%
-#   mutate(roll_lm = rolling_lm(datetime7,q)) %>%
-#   filter(!is.na(roll_lm)) %>%
-#   mutate(tidied = purrr::map(roll_lm, broom::tidy)) %>%
-#   unnest(tidied) %>%
-#   filter(term == "x") %>%
-#   select(datetime7, q, estimate) -> df4
-# df4
-
-
+}, 
+window = slope_window, na_value = NA,unlist = TRUE)
 
 
 # df <- pt_data2
@@ -47,7 +19,7 @@ unlist = TRUE)
 # peak_window = 479
 # date = "DateTime"
 
-.peak_fun <- function(df,measure = c("h","q"),peak_window = 32,date = "DateTime"){
+.pt_data3_fun <- function(df,measure = c("h","q"),peak_window = 32,date = "DateTime"){
   measure1 = measure[1]
   head_pad <- df[0,]
   head_pad[nrow(head_pad)+round(peak_window/2),] <- NA
@@ -85,7 +57,11 @@ unlist = TRUE)
 # date = "DateTime"
 # test_window = 5
 
-.peak_test <- function(df,test_window = 5,slope = c("h_slope","q_slope"),slope_percentile = 0.95,peak = c("h_peak_logi","q_peak_logi"),date = "DateTime"){
+.pt_data4_fun <- function(df,test_window = 5,
+                          slope = c("h_slope","q_slope"),
+                          slope_percentile = 0.95,
+                          peak = c("h_peak_logi","q_peak_logi"),
+                          date = "DateTime"){
   # Set column names for analysis of first time series. 
   # Generalized to faciliate code being used for matching peaks in data other than q and h.
   colnames(df)[which(colnames(df) == slope[1])] <- "set_measure"  
@@ -135,7 +111,7 @@ unlist = TRUE)
 # df = filter(pt_data4,between(DateTime,ymd_hm("2019-02-14 10:00",tz=proj_tz),ymd_hm("2019-02-14 15:30",tz=proj_tz)))
 # df = filter(pt_data4,between(DateTime,ymd_hm("2018-05-16 00:00",tz=proj_tz),ymd_hm("2018-05-17 00:00",tz=proj_tz)))
 
-# 
+# df = pt_data4[1020:1070,]
 # q_logi = "q_slope_test"
 # h_logi = "h_slope_test"
 # date = "DateTime"
@@ -143,7 +119,12 @@ unlist = TRUE)
 # search_direction = "right"
 # x = df$q_slope_test
 # df$DateTime
-.match_test <- function(df,test_window = 23,q_logi = "q_slope_test",h_logi = "h_slope_test",date = "DateTime",search_direction){
+.match_test <- function(df,
+                        test_window = 23,
+                        q_logi = "q_slope_test",
+                        h_logi = "h_slope_test",
+                        date = "DateTime",
+                        search_direction){
   colnames(df)[which(colnames(df) == q_logi)] <- "get_q"  
   colnames(df)[which(colnames(df) == h_logi)] <- "set_h"
   colnames(df)[which(colnames(df) == date)] <- "set_date"
@@ -154,7 +135,7 @@ unlist = TRUE)
                                                                             length(which(x == TRUE))),
                                                          fill = NA,partial = FALSE),
                                 NA) ,
-           match_row = ifelse(set_h == TRUE, rollapply(get_q,align = search_direction,width = test_window,
+           match_row = ifelse(set_h == TRUE & match_count > 0, rollapply(get_q,align = search_direction,width = test_window,
                                                      function(x) ifelse(all(is.na(x)),NA,
                                                                         suppressWarnings(max(which(x == TRUE),na.rm = T))),
                                                      fill = NA,partial = FALSE),
@@ -163,25 +144,29 @@ unlist = TRUE)
   # Make match_row relative to stage peak row number, bc the rollapply reference depends on search direction:
   # for "left", match_row is relative to the stage row number.
   # for "right", match_row is relative to the match window. See below. Make both relative to stage row number.
-  if(search_dir == "left"){
+  if(search_direction == "left"){
     df2 <- df2 %>%
       mutate(match_row = if_else(!is.na(match_row),  
                               match_row -1L,                   
                               NA_real_))                            
                                                         
     
-  } else if(search_dir == "right") {
+  } else if(search_direction == "right") {
     df2 <- df2 %>%
       mutate(match_row = if_else(!is.na(match_row), 
-                              as.integer(match_window-match_row),
-                              NA_integer_)) 
+                              (match_window-match_row),
+                              NA_real_)) 
   }
 
   # Clean up column names
   colnames(df2)[which(colnames(df2) == "set_date")] <- date
   colnames(df2)[which(colnames(df2) == "get_q")] <- q_logi 
   colnames(df2)[which(colnames(df2) == "set_h")] <- h_logi
-  colnames(df2)[which(colnames(df2) == "match_count")] <- paste0("match_count",test_window)
+
+  
+  # remove padding
+  df2 <- filter(df2,!is.na(DateTime))
+  
   return(df2)
 }
 
@@ -217,6 +202,9 @@ unlist = TRUE)
   return(df2)
 }
 
+###########################################################
+## plotting functions for pt_data3, 4, and 5
+###########################################################
 .plot_data3_fun <- function(data,facet_count,window){
   cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
   names(cbPalette) <- as.character(expression(grey,orange,lightblue,green,yellow,darkblue,orange,purple))
@@ -256,17 +244,19 @@ unlist = TRUE)
   return(list(plot_return,plot_data3))
 }
 
+
+
 .plot_data4_fun <- function(data,facet_count,window,groupscale=FALSE){
   plot_data4 <- filter(data,!is.na(DateTime))
   if(groupscale == TRUE){
-    plot_data4 = plot_data4 %>%
+    plot_data4 <- plot_data4 %>%
         mutate(cut_ts = cut(DateTime,facet_count),
                cut_ts = forcats::fct_explicit_na(cut_ts)) %>%
         group_by(cut_ts) %>%
         mutate(q_rs = scales::rescale(q),
                h_rs = scales::rescale(h))
-  } else {
-    plot_data4 = plot_data4 %>%
+  } else if(groupscale == FALSE) {
+    plot_data4 <- plot_data4 %>%
       mutate(cut_ts = cut(DateTime,facet_count),
              cut_ts = forcats::fct_explicit_na(cut_ts)) %>%
       group_by() %>%
@@ -275,40 +265,44 @@ unlist = TRUE)
   }
   
 
-  # wrangle for plotting 
-  # 3/21/20 - colors etc are wrong still - q peaks are on h_rs line
   plot_data4 <- plot_data4 %>% 
     group_by() %>% 
     select(DateTime,cut_ts,h_rs,q_rs,h,q,h_peak_logi,q_peak_logi,h_slope_test,q_slope_test) %>% 
     mutate(q_peakmark = if_else(q_slope_test == TRUE, "q peak slope",
-                              if_else(q_peak_logi == TRUE,"q peak","q")),
-         h_peakmark = if_else(h_slope_test == TRUE, "h peak slope",
-                              if_else(h_peak_logi == TRUE,"h peak","h"))) %>% 
-    select(-c(h_peak_logi, q_peak_logi, h_slope_test, q_slope_test)) %>% 
-    pivot_longer(cols = c(h_rs,q_rs),names_to = c("measure"),values_to = "value") %>% 
-    pivot_longer(c(q_peakmark,h_peakmark),names_to = "mark",values_to = "markvalue") %>% 
-    mutate(markvalue = if_else(is.na(markvalue),measure,markvalue))%>% 
-    filter(!is.na(DateTime)) %>% 
-    filter((grepl("q",mark) & grepl("q",markvalue)) | (grepl("h",mark) & grepl("h",markvalue)))
+                                if_else(q_peak_logi == TRUE,"q peak","q")),
+           h_peakmark = if_else(h_slope_test == TRUE, "h peak slope",
+                                if_else(h_peak_logi == TRUE,"h peak","h")))
+  
+  
+  hd <- plot_data4 %>% 
+    select(DateTime,cut_ts,h,h_rs,h_peakmark) %>% 
+    rename(meas = h,smeas = h_rs,peakmark = h_peakmark) %>% 
+    mutate(meastype = "h")
+  qd <- plot_data4 %>% 
+    select(DateTime,cut_ts,q,q_rs,q_peakmark) %>% 
+    rename(meas = q,smeas = q_rs,peakmark = q_peakmark) %>% 
+    mutate(meastype = "q")
+  
+  plot_data4 <- bind_rows(hd,qd) %>% 
+    mutate(peakmark = if_else(is.na(peakmark),meastype,peakmark))
 
- 
   cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7","#FF0000")
   names(cbPalette) <- as.character(expression(grey,orange,lightblue,green,yellow,darkblue,orange,purple,red))
   model_color <- cbPalette[c("grey","lightblue","purple","orange","orange","purple")]
-  names(model_color) <-as.character(c("q_rs","h_rs","q peak","h peak","h peak slope","q peak slope"))
+  names(model_color) <-as.character(c("q","h","q peak","h peak","h peak slope","q peak slope"))
   
-  model_size <- c(0,0,2,2,4,4)
-  names(model_size) <-as.character(c("q_rs","h_rs","q peak","h peak","h peak slope","q peak slope"))
+  model_size <- c(0,0,2,2,2,2)
+  names(model_size) <-as.character(c("q","h","q peak","h peak","h peak slope","q peak slope"))
   
-  model_shape <- c(NA,NA,16,16,1,1)
-  names(model_shape) <-as.character(c("q_rs","h_rs","q peak","h peak","h peak slope","q peak slope"))
-    
+  model_shape <- c(NA,NA,16,16,17,17)
+  names(model_shape) <-as.character(c("q","h","q peak","h peak","h peak slope","q peak slope"))
+  
   plot_return <- ggplot() +
-    geom_line(data = tmp,aes(x = DateTime, y = value,color = measure),size = 0.5) +
-    geom_point(data = tmp,aes(x = DateTime, y = value,
-                              color = markvalue,
-                              size = markvalue,
-                              shape = markvalue)) +
+    geom_line(data = plot_data4,aes(x = DateTime, y = smeas,color = meastype),size = 0.5) +
+    geom_point(data = plot_data4,aes(x = DateTime, y = smeas,
+                                      color = peakmark,
+                                      size = peakmark,
+                                      shape = peakmark)) +
     scale_color_manual(name = '',
                        values = model_color) +
     scale_size_manual(name = '',
@@ -333,70 +327,89 @@ unlist = TRUE)
     return(list(plot_return,plot_data4))
 }
 
+# data = pt_data5
+# facet_count = 6
+# window = peak_window
+# groupscale = F
+
 
 .plot_data5_fun <- function(data,facet_count,window,groupscale=FALSE){
-  cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7","#FF0000")
-  names(cbPalette) <- as.character(expression(grey,orange,lightblue,green,yellow,darkblue,orange,purple,red))
-  model_color <- cbPalette[c("grey","lightblue","purple","orange","red","red")]
-  names(model_color) <-as.character(c("Discharge","Stage","Q Peak","H Peak","H Peak matched","Q Peak matched"))
-  
-  # rows noted as matched Q peaks
-  pqrows <- plot_data5[filter(plot_data5,!is.na(pq_row))$pq_row,]
-  # rows noted as matched H peaks
-  phrows <- filter(plot_data5,!is.na(pq_row))
-  # Bind matched peaks together, arrange by date, add column distinguising column
-  mpeaks <- rbind(pqrows,phrows) %>%
-    arrange(DateTime) %>% 
-    mutate(PointType = if_else(is.na(match_row),"Q Peak matched","H Peak matched"))
-
-  # Add distinguishing column to main data frame
-  plot_data5$PointType <- "All Data"
-  
-  # combine
-  tmp <- bind_rows(plot_data5,mpeaks) %>% 
-    arrange(DateTime)
-  
-  # add plotting groups and scale
   if(groupscale == TRUE){
-    tmp <- tmp %>%
-      mutate(cut_ts = cut(DateTime,facet_count),
-             cut_ts = forcats::fct_explicit_na(cut_ts)) %>%
+    plot_data5 <- data %>%
+      mutate(cut_ts = cut(DateTime,facet_count)) %>%
       group_by(cut_ts) %>%
       mutate(q_rs = scales::rescale(q),
              h_rs = scales::rescale(h))
-  } else if(groupscale == FALSE){
-    tmp <- tmp %>%
-      mutate(cut_ts = cut(DateTime,facet_count),
-             cut_ts = forcats::fct_explicit_na(cut_ts)) %>%
-      group_by() %>%
+  } else if(groupscale == FALSE) {
+    plot_data5 <- data %>%
+      mutate(cut_ts = cut(DateTime,facet_count)) %>%
       mutate(q_rs = scales::rescale(q),
              h_rs = scales::rescale(h))
   }
+
+  plot_data5 <- plot_data5 %>%
+    group_by() %>%
+    select(DateTime,cut_ts,h_rs,q_rs,h,q,h_peak_logi,q_peak_logi,h_slope_test,q_slope_test,match_count,match_row,pq_row) %>% 
+    mutate(h_peakmark = if_else(!is.na(match_row), "h peak match",NA_character_),
+           q_peakmark = NA_character_,
+           peak_n = NA_integer_)
+
+  # num_peaks <- length(which(plot_data5$h_peakmark == "h peak match"))
+  p=0
+  for(i in 1:nrow(plot_data5)){
+    if(!is.na(plot_data5[i,]$h_peakmark)){
+      p <- p +1
+      plot_data5[i,]$peak_n <- p
+      plot_data5[plot_data5[i,]$pq_row,"peak_n"] <- p
+      plot_data5[plot_data5[i,]$pq_row,"q_peakmark"] <- "q peak match"
+    }
+  }
+
+  hd <- plot_data5 %>%
+    select(DateTime,cut_ts,h,h_rs,h_peakmark,peak_n) %>%
+    rename(meas = h,smeas = h_rs,peakmark = h_peakmark) %>%
+    mutate(meastype = "h")
+  qd <- plot_data5 %>%
+    select(DateTime,cut_ts,q,q_rs,q_peakmark,peak_n) %>%
+    rename(meas = q,smeas = q_rs,peakmark = q_peakmark) %>%
+    mutate(meastype = "q")
+
+  plot_data5 <- bind_rows(hd,qd) %>%
+    mutate(peakmark = if_else(is.na(peakmark),meastype,peakmark))
   
-  
-  plot_return = ggplot() + 
-    geom_line(data = filter(tmp,PointType == "All Data"),
-              aes(x = DateTime, y = h_rs,color = "Stage"),size = 0.5) +       
-    geom_line(data = filter(tmp,PointType == "All Data"),
-              aes(x = DateTime, y = q_rs,color = "Discharge"),size = 0.5) +  
-    # geom_point(data = filter(plot_data5,h_peak_logi == TRUE),
-    #            aes(x = DateTime, y = h_rs,color = "H Peak"),size = 1) +
-    # geom_point(data = filter(plot_data5,q_peak_logi == TRUE),
-    #            aes(x = DateTime, y = q_rs,color = "Q Peak"),size = 1) +
-    geom_point(data = filter(tmp,PointType == "H Peak matched"),
-               aes(x = DateTime, y = h_rs,color = "H Peak matched"),size = 3,shape = 1) +
-    geom_point(data = filter(tmp,PointType == "Q Peak matched"),
-               aes(x = DateTime, y = q_rs,color = "Q Peak matched"),size = 3,shape = 1) +
+  cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7","#FF0000")
+  names(cbPalette) <- as.character(expression(grey,orange,lightblue,green,yellow,darkblue,orange,purple,red))
+  model_color <- cbPalette[c("grey","lightblue","purple","orange","orange","purple")]
+  names(model_color) <- as.character(c("q","h","h peak match","q peak match"))
+
+  model_size <- c(0,0,2,2,2,2)
+  names(model_size) <-as.character(c("q","h","h peak match","q peak match"))
+
+  model_shape <- c(NA,NA,16,16,17,17)
+  names(model_shape) <-as.character(c("q","h","h peak match","q peak match"))
+
+  plot_return <- ggplot() +
+    geom_line(data = plot_data5,aes(x = DateTime, y = smeas,color = meastype),size = 0.5) +
+    geom_point(data = plot_data5,aes(x = DateTime, y = smeas,
+                                     color = peakmark,
+                                     size = peakmark,
+                                     shape = peakmark)) +
+    geom_text(data = filter(plot_data5,peakmark == "h peak match"),aes(x = DateTime,y = smeas,label = peak_n),nudge_y = 0.1) +
     scale_color_manual(name = '',
-                       values = model_color)+
+                       values = model_color) +
+    scale_size_manual(name = '',
+                      values = model_size) +
+    scale_shape_manual(name = '',
+                       values = model_shape) +
+
     ylab("Rescaled h and q") +
     xlab("Date") +
-    ggtitle(paste0("Matched ", round(window*15/60,2)," hour peaks"))+
+    ggtitle(paste0(round(window*15/60,2)," hour peak"))+
     # slope_percentile,"% slope cutoff / ",
     # round(match_window*15/60),"hr match window")) +
     theme_minimal(base_size =12) +
     # theme_void(base_size =24) +
-    theme(strip.background = element_blank(), 
+    theme(strip.background = element_blank(),
           strip.text.x = element_blank(),
           panel.grid.major=element_blank(),
           panel.grid.minor=element_blank(),
@@ -407,64 +420,37 @@ unlist = TRUE)
 }
 
 
-
-.matched_peaks_fun <- function(df = pt_data5,
-                               search_dir = search_direction,
-                               match_window = match_window,
-                               view_minutes = 23){
-  # Depending on whether the search direction is left (sensor lags the downstream stream gage) 
-  # or right (sensor leads the upstream stream gage)), this code produces three new columns:
-  # 1. rnum is the row number of the datetime vector that will stay fixed to the stage record
-  # 2. sdir is a confirmation indicator of the search direction that is chosen
-  # 3. pq_row is the row number of a matched peak q (found within the match window, given the search direction)
-  
-  if(search_dir == "left"){
-    df <- df %>%
-      mutate(rnum = row_number(),
-             sdir = search_dir,
-             pq_row = if_else(!is.na(match_row), #    For the given row, if match_row is not NA, 
-                              rnum + match_row -1L, # then add the row number to the number of 
-                              NA_real_))#             rows separating the row and the row with  
-                                        #             the matched peak (match_row), minus 1. Else, NA.
-  } else {
-    df <- df %>%
-      mutate(rnum = row_number(),
-             sdir = search_dir,
-             pq_row = if_else(!is.na(match_row), # Just like above, but modified for searching 'right'
-                              rnum - as.integer(match_window-match_row),
-                              NA_integer_)) 
-  }
-  
-  # scale q and h for comparing peaks and cut time series for viewing
-  df <- df %>%
-    mutate(q_rs = scales::rescale(q),
-           h_rs = scales::rescale(h),
-           cut_ts = cut(DateTime,cut_number))
-  
-  # Get just rows with peak discharge measurments
-  pq_rows <- df[which(!is.na(df$pq_row)),]$pq_row
-  
+.matched_peaks_fun <- function(data = pt_data6){
+ 
   # build dataframe of just q peaks; 
   # rename the following columns to indicate marked peak status:
   # DateTime, q, q_rs, and rnum. Note that the rnum column is changed to
   # pq_row and is the basis for the inner_join with the pt_data
-  q_peaks <- select(df,rnum,DateTime,q_slope_test,q,q_rs) %>%
-    filter(rnum %in% pq_rows) %>%
-    rename(pq_row = rnum,DT_pq = DateTime,pq = q,pq_rs = q_rs) %>%
-    select(pq_row,DT_pq,pq,pq_rs)
+  q_peaks <- data %>% 
+    filter(peakmark == "q peak match") %>%
+    rename(DT_pq = DateTime,pq = meas,pq_rs = smeas) %>%
+    select(peak_n,DT_pq,pq,pq_rs)
+  h_peaks <- data %>% 
+    filter(peakmark == "h peak match") %>%
+    rename(DT_ph = DateTime,ph = meas,ph_rs = smeas) %>%
+    select(peak_n,DT_ph,ph,ph_rs)
   
   # Build dataframe of h peaks and q peaks, with two date columns, one for the h and one for the lag/lead q.
-  # this is accomplished using the inner_join with the q_peaks table based on the pq_row column.
-  # Rename stage columns to indicate peak status.
-  matched_peaks <- filter(df,!is.na(pq_row)) %>%
-    rename(DT_ph = DateTime,ph = h,ph_rs = h_rs) %>%
-    inner_join(q_peaks,by = "pq_row") %>%
+  matched_peaks <- bind_cols(h_peaks,q_peaks) %>% 
     # add peak number, which can be used for idetifying a particular peak
     # add time shift between the two peaks
-    mutate(peak_n = row_number(),
-           cut_peak_n = cut(peak_n,2),
-           shift =  as.numeric(DT_ph - DT_pq,units = "hours")) %>%
-    select(peak_n,DT_pq,DT_ph,shift,pq,ph,pq_rs,ph_rs,cut_ts,cut_peak_n) %>%
+    mutate(shift =  as.numeric(DT_ph - DT_pq,units = "hours")) %>%
+    select(peak_n,DT_pq,DT_ph,shift,pq,ph,pq_rs,ph_rs)
+  return(matched_peaks)
+  
+}
+
+# data = pt_data6
+# peak_table = matched_peaks
+
+.view_port_fun <- function(data,peak_table,view_minutes){
+  # Add viewing interval to matched_peaks df
+  peak_table <- peak_table %>% 
     # create columns defining a period of hours before and after 
     # the marked peak to enhance QAQC visualization
     mutate(target_start = pmin(DT_ph,DT_pq), # min date between h and q date columns
@@ -486,6 +472,19 @@ unlist = TRUE)
            view_final = if_else(is.na(view_final),view_interval,view_final)) %>%
     select(-c(target_start:view_end2))
   
-  return(matched_peaks)
-  
+  # Create a list of dataframes, one for each peak viewing interval. 
+  # The viewing interval is defined by the view_minutes argument.
+  peak_view_list <- list()
+  for(i in 1:max(peak_table$peak_n)){
+    peak_i <- i
+    interval_i <- peak_table %>% 
+      filter(peak_n == peak_i)
+    interval_i <- interval_i$view_final
+    view_tbl_i <- data %>% 
+      filter(DateTime %within% interval_i)  
+    peak_view_list[[i]] <- view_tbl_i
+  }
+  return(peak_view_list)
 }
+
+
