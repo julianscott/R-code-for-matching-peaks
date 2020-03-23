@@ -14,45 +14,23 @@ Potential uses of this script includes:
 
 (3) constructing stage-discharge rating tables or rating curves at a study reach with an upstream/downstream stream gage, etc.
 
-Required input file:
+SCRIPTS:
 
-1. A data frame (called 'pt_data' below) with three columns: datetime, stage, and q.
-   File can be a user-provided csv or produced using the 'sensor_and_gage_sync_generalized' 
-   script available at https://github.com/julianscott/R-code-for-matching-peaks.
-    
-   See example data frame (provided below at the github link) to observe required format.
+peak_matching_script.R - Use this script for matching peaks in two properly formatted time series.
+
+functions_for_peak_matching.R - Download this script and place in working directory or some other noted directory. This script provides                                   SOURCE code for functions used in peak_matching_script.R.
+
+sync_time_series_script.R - Use this optional script for creating input that is properly formatted for analysis in the                 
+                            peak_matching_script.R.
+EXAMPLE DATA:
+
+example_synced_sensor_data.csv - Example data for use in running the peak_matching_script.R 
+
+example_stage_sensor_data.csv - Example data for use in running the sync_time_series_script.R.
 
 
-To run script, either download pt_data download example synced up pressure stage and discharge time series data (provided below at the github link). Or, read in your own synced up data. Format of your own data must match example data. 
-pt_data <- fread("https://raw.githubusercontent.com/julianscott/R-code-for-matching-peaks/master/synced_Q_and_stage_timeseries.csv")
 
-This strategy uses 4 steps for matching peaks. Starting with the dataframe called pt_data, the dataframe name is modified after each step so that, at the end, we have objects called pt_data2, pt_data3, pt_data4, and pt_data5. Each consequtive dataframe is based on the 
-previous table and has the same number of rows, but additional columns, containing slope, peak, and other types of diagnostic data.  
-Here is a description of the main objects created in this script:
 
-pt_data: Dataframe with two time series of data that shair a datetime column.
+                        
+                            
 
-pt_data2: Add moving average slope, using a defined window. Also adds a slope sign column.
-
-pt_data3: Flag each observation that meets the criteria as a 'peak'. Uses a rolling window
-          to tests whether the observation is the maximum in the defined window.
-pt_data4: For each flagged 'peak', flag again those observations that occur within a window where 
-          the slope is greater than the given percentile of all slopes (95% is default). 
-          
-pt_data5: Tests whether there are flagged peaks in one time series that precede or follow the 
-          occurrence of a flagged peak in the other time series. Takes arguments to set the 
-          window in which to look for peaks and for which peak flag to base the test on: 
-          "basic peaks" from pt_data3 or "peaks that occurs within a window with a particularly 
-          steep slope", from pt_data4)
-
-pt_data6: A final object called pt_data6 is constructed that is in 'long' form, for plotting purposes, 
-          with stage and discharge data stacked on top of each other, so there are twice as many rows 
-          as the other pt_data* objects.  
-
-matched_peaks: Finally, the objects "matched_peaks" is created. This object contains the results of this
-               peak matching script, with the datetime and magnitude of the paired peaks and the shift
-               in time (lead or lag) between each paired peak.
-
-Note the use of scaled magnitudes throughout this script. This is a key component for visualizing paired peaks for scalars that can vary by orders of magnitude. The scale::rescales() function rescales each time series, by group or overall, to the range 0 to 1. The actual magnitudes are kept throughout, though the scaled values are used exclusively in plotting.
-
-The intent is for the analyst to use the arguments in these functions to iteritively search for the "best" settings for a given study - NOT ONE SETTING IS BEST FOR ALL SITUATIONS.
