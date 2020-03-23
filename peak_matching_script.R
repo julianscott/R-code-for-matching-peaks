@@ -1,44 +1,53 @@
-###############################################################################
-# Code for identifying peaks in two timeseries of data, matching peaks separated by 
-# a lag/lead for upstream/downstream timestamps, and plotting for QAQC
+# Author: Julian A Scott, National Stream and Aquatic Ecology Center, US Forest Service
+# Contact: julianscott@usda.gov - 970-295-5974 - julianscotta@gmail.com
+# 23 March, 2020
 
+# Code for (1) identifying peaks in two data time series, (2) matching peaks separated by 
+# a lag/lead for upstream/downstream timestamps, (3) plotting peaks.
 
-# packages <- c("grid","RCurl","oce","roll","RcppRoll","dataRetrieval","formattable","data.table","tibbletime","hydroTSM","xtable","tidyverse","chron","lubridate","ggpubr","segmented","stargazer","zoo","readxl")
-packages <- c("roll","RcppRoll","dataRetrieval","data.table",'zoo','tibbletime',"tidyverse","lubridate","readxl")
+# Potential uses of this script includes (1) automatically identifying paired peaks in 
+# two dependent data time series, (2) calculating discharge-dependent lead or lag 'shift' 
+# between stream gage observations and upstream or downstream river stage observations, 
+# (3) constructing stage-discharge rating tables or rating curves at a study reach with an
+# upstream/downstream stream gage, etc.
+
+# Required packages
+packages <- c("roll","dataRetrieval","data.table",'zoo','tibbletime',"tidyverse","lubridate")
 
 # Check to see if each is installed, and install if not.
 if (length(setdiff(packages, rownames(installed.packages()))) > 0) {
   install.packages(setdiff(packages, rownames(installed.packages())))
 }
 
-# now, use the lapply function to load the installed libraries in the packages list
+# Use the lapply function to load the installed libraries in the packages list
 lapply(packages,library,character.only=TRUE)
 
 
-# Input file is:
+# Required input file:
 # 1. A data frame (called 'pt_data' below) with three columns: datetime, stage, and q.
-#    File can be a user-provided csv or produced using the sensor_and_gage_sync_generalized script available at
-#    https://github.com/julianscott/R-code-for-matching-peaks
+#    File can be a user-provided csv or produced using the 'sensor_and_gage_sync_generalized' 
+#    script available at https://github.com/julianscott/R-code-for-matching-peaks.
+     
+#    See example data frame (provided below at the github link) to observe required format.
 
 
-# To run script, download pt_data download example synced up pressure stage and discharge timeseries data. 
+# To run script, either download pt_data download example synced up pressure stage and discharge 
+# time series data (provided below at the github link). 
 # Or, read in your own synced up data. Format of your own data must match example data. 
 pt_data <- fread("https://raw.githubusercontent.com/julianscott/R-code-for-matching-peaks/master/synced_Q_and_stage_timeseries.csv")
 
-
 # Ensure datetime data is formatted correctly. For the example, its year-month-day hour:minute:second 
-# in the "America/Los_Angeles" time zone. 
+# in the GMT-8 time (i.e., "Etc/GMT+8"), or the United States Pacific time zone without daylight savings
+# observed). 
 
-# Note, convieniently, lubridate can handle daylight saving time.
-# ?tz
-# check OlsonNames for list of valid time zones
-# OlsonNames(tzdir = NULL)
+# Set time zone for sensor data. Note that pressure transducer data commonly does not adjust for 
+# daylight savings, so time zones like "America/Las_Angeles" can cause complications.
+proj_tz = "Etc/GMT+8" # run OlsonNames(tzdir = NULL) for more
 
-# proj_tz = "America/Los_Angeles" #
-proj_tz = "Etc/GMT-8" #
+# Format datetimes
 pt_data$DateTime <- lubridate::ymd_hms(pt_data$DateTime,tz = proj_tz)
 
-# Define the number of chunks to split the time series into for viewing
+# Define the number of chunks to split the time series into for plotting purposes
 cut_number <- 6
 
 # Format the dataframe with some useful columns
@@ -101,23 +110,55 @@ pt_data %>%
     facet_wrap(~cut_ts ,scales = "free",ncol = 1)
 
 
-#### End section of script for reading and formating syced timeseries data 
+#### End section of script for reading and formating syced time series data 
 ###########################################################################################
 #### Begin section for matching peaks in the two timeseries
 
 # This strategy uses 4 steps for matching peaks. Starting with the dataframe called pt_data,
 # the dataframe name is modified after each step so that, at the end, we have objects called
 # pt_data2, pt_data3, pt_data4, and pt_data5. Each consequtive dataframe is based on the 
-# previous table and has the same number of rows, but additional columns. 
+# previous table and has the same number of rows, but additional columns, containing slope,
+# peak, and other types of diagnostic data. 
 
-# Use a moving average functions (hydro_timeseries_analysis.R) to get sliding means, slopes, peaks, etc from
-# time series of q and h
+# pt_data: Dataframe with two time series of data that shair a datetime column.
+# pt_data2: Add moving average slope, using a defined window. Also adds a slope sign column.
+# pt_data3: Flag each observation that meets the criteria as a 'peak'. Uses a rolling window
+#           to tests whether the observation is the maximum in the defined window.
+# pt_data4: For each flagged 'peak', flag again those observations that occur within a window where 
+#           the slope is greater than the given percentile of all slopes (95% is default).  
+# pt_data5: Tests whether there are flagged peaks in one time series that precede or follow the 
+#           occurrence of a flagged peak in the other time series. Takes arguments to set the 
+#           window in which to look for peaks and for which peak flag to base the test on: 
+#           "basic peaks" from pt_data3 or "peaks that occurs within a window with a particularly 
+#           steep slope", from pt_data4)
 
-source("hydro_timeseries_analysis_generalized.R")
 
-# calculate a rolling average and rolling slope 
+# A final object called pt_data6 is constructed that is in 'long' form, for plotting purposes, 
+# with stage and discharge data stacked on top of each other, so there are twice as many rows 
+# as the other pt_data* objects.  
 
-# define the window for the calculation. Assumes each data point is a 15 minute measurement.
+# Finally, the objects "matched_peaks" is created. This object contains the results of this
+# peak matching script, with the datetime and magnitude of the paired peaks and the shift
+# in time (lead or lag) between each paired peak.
+
+# Note the use of scaled magnitudes throughout this script. This is a key component for
+# visuallizing paired peaks for scalars that can vary by orders of magnitude.
+# The scale::rescales() function rescales each time series, by group or overal, to the 
+# range 0 to 1. The actual magnitudes are kept throughout, though the scaled values are
+# used exclusively in plotting.
+
+# The intent is for the analyst to use the arguments in these functions to iteritively search
+# for the "best" settings for a given study - ONE SETTING IS NOT BEST FOR ALL SITUATIONS.
+
+########################################################################################
+#  Begin script
+###########################################################################################
+# Set source for functions. This file should be in the working directory or the full directory
+# must be added.
+source("functions_for_peak_matching.R")
+
+# Calculate a rolling average and rolling slope 
+# Define the window for the calculation. Assumes each data point is a 15 minute measurement.
 slope_window = 3 # where 1 = 15 minutes, for 15-minute data.
 pt_data2 <- pt_data %>%
   # remove grouping 
@@ -126,7 +167,7 @@ pt_data2 <- pt_data %>%
   mutate(h_slope = .rolling_lm(x = DateTime, y = h), # sliding elevation slope (dh/dt), for value + previous 4 measures (right aligned)
          h_msign = ifelse(h_slope > 0, "+","-" ),     # sign of the elevation slope
          q_slope = .rolling_lm(x = DateTime, y = q), # sliding q slope (dq/dt), for value + previous 4 measures (right aligned)
-         q_msign = ifelse(q_slope > 0, "+","-" ))     # ssign of the q slope
+         q_msign = ifelse(q_slope > 0, "+","-" ))     # sign of the q slope
 
 # Identify peaks in h and q
 # For example dataset, each row is 15 minutes, so  1=15 minutes, 2=30 minutes, etc.
@@ -158,7 +199,6 @@ plot_pt_data3
 # Test if the peaks marked in 'pt_data3' occur in a window of time (test window) 
 # when abs(slope) was > 95% of all slopes. The intent is to distinguish those peaks 
 # that are associated with dramatic increases in rate (i.e. true peaks)
-
 test_window = 5
 slope_percentile = 0.99
 pt_data4 <- .pt_data4_fun(df = pt_data3,
@@ -177,23 +217,21 @@ plotdata_pt_data4 <- get_plot_and_plotdata4[2]
 plot_pt_data4
 
 
-# For every marked peak h, look in the match_window for a marked peak q.
-# search_direction depends on whether the stream gage is upstream ("right"
-# or downstream ("left") of the sensor. If a marked q is found, return the 
-# number of rows separating the h peak from the q peak. This is the 'match_row' column.
+# For every marked peak h, look in the match_window for a marked peak q. If a marked q is found, 
+# return the number of rows separating the h peak from the q peak. This is the 'match_row' column.
 
+#####################################################################
+#  Crtical!!!!!!!!!!!!!!!!
+# You have to set the variable Search_direction to "left" or "right".
+# This depends on whether the stream gage is upstream ("right") or
+# downstream ("left") of the sensor.
+#####################################################################
+ 
 # The variables q_logi and h_logi allow you to set which logic variable to base the test on:
 # q_peak_logi and h_peak_logi are tests of whether the measurement is the maximum in the window 
 # (i.e. a marked peak), while q_slope_test and h_slope_test are tests of whether the slopes in 
 # the graph around the marked peak exceed the defined slope threshold (i.e. the latter 
-# is usually more stringent the former).
-
-# add in overrides if desired
-# manual additions
-# DT_pq_m1 <- ymd_hm(c("2019-02-14 15:15","2019-02-14 09:15"),tz=proj_tz)
-# DT_ph_m1 <- ymd_hm(c("2019-02-14 15:30","2019-02-14 09:30"),tz=proj_tz)
-# override_df <- data.frame(DT_pq = DT_pq_m1,DT_ph = DT_ph_m1)
-# pt_data4 <- .override_fun(dt_df = override_df,record_df = pt_data4)
+# is usually more stringent the former). I recommend using the q/h_slope_test variables.
 
 match_window = 23 
 search_direction = "right" # stream gage is upstream ("right") or downstream ("left") of the sensor
@@ -225,8 +263,11 @@ plot_pt_data5
 
 pt_data6 <- plotdata_pt_data5[[1]]
 
-
+# The table 'matched_peaks' contains all matched peaks taht have been identified
+# in the two time series.
 matched_peaks <- .matched_peaks_fun(data = pt_data6)
+
+
 
 data_for_plotting <- .view_port_fun(data = pt_data6,
                                     peak_table = matched_peaks,

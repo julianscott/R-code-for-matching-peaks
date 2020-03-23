@@ -6,19 +6,15 @@
   return(y)
 }
 
-
 .rolling_lm <- rollify(.f = function(x = DateTime,y) 
   {
   tryCatch({coef(lm(y ~ x))[2]},error = function(e){NA})
 }, 
 window = slope_window, na_value = NA,unlist = TRUE)
 
-
-# df <- pt_data2
-# measure = c("h","q")
-# peak_window = 479
-# date = "DateTime"
-
+###############################################################
+# pt_data functions
+###############################################################
 .pt_data3_fun <- function(df,measure = c("h","q"),peak_window = 32,date = "DateTime"){
   measure1 = measure[1]
   head_pad <- df[0,]
@@ -49,13 +45,6 @@ window = slope_window, na_value = NA,unlist = TRUE)
   
   return(df3)
 }
-
-# df = pt_data3
-# slope = c("h_slope","q_slope")
-# slope_percentile = 0.95
-# peak = c("h_peak_logi","q_peak_logi")
-# date = "DateTime"
-# test_window = 5
 
 .pt_data4_fun <- function(df,test_window = 5,
                           slope = c("h_slope","q_slope"),
@@ -105,20 +94,7 @@ window = slope_window, na_value = NA,unlist = TRUE)
   
   return(df3)
 }
-# 
-# df = (filter(pt_data4,date(DateTime) == "2018-03-15"))
-# df = (filter(pt_data4,date(DateTime) == "2019-02-14"))
-# df = filter(pt_data4,between(DateTime,ymd_hm("2019-02-14 10:00",tz=proj_tz),ymd_hm("2019-02-14 15:30",tz=proj_tz)))
-# df = filter(pt_data4,between(DateTime,ymd_hm("2018-05-16 00:00",tz=proj_tz),ymd_hm("2018-05-17 00:00",tz=proj_tz)))
 
-# df = pt_data4[1020:1070,]
-# q_logi = "q_slope_test"
-# h_logi = "h_slope_test"
-# date = "DateTime"
-# test_window = match_window
-# search_direction = "right"
-# x = df$q_slope_test
-# df$DateTime
 .match_test <- function(df,
                         test_window = 23,
                         q_logi = "q_slope_test",
@@ -167,38 +143,6 @@ window = slope_window, na_value = NA,unlist = TRUE)
   # remove padding
   df2 <- filter(df2,!is.na(DateTime))
   
-  return(df2)
-}
-
-# 
-# tmp <- filter(sensor_data,between(DateTime,ymd("2017-08-05",tz=proj_tz),ymd("2017-08-06",tz=proj_tz)))
-# View(select(tmp,DateTime,h_peak_logi,q_peak_logi,h_slope_test,q_slope_test,match_date23))
-
-
-.override_fun <- function(dt_df,record_df) {
-  for(i in 1:nrow(dt_df)){
-    dt_q = dt_df[[i,1]]
-    dt_h = dt_df[[i,2]]
-    record_df[which(record_df$DateTime == dt_q),"q_slope_test"] <- TRUE
-    record_df[which(record_df$DateTime == dt_h),"h_slope_test"] <- TRUE
-  }
-  return(record_df)
-}
-
-.interval_union <- function(df,int_col) {
-  colnames(df)[which(colnames(df) == int_col)] <- "get_interval"  
-  df2 <- df %>%
-    mutate(view_interval2 = rollapply(get_interval,width = 3,align = "center",
-                                      function(x){
-                                        if(int_overlaps(x[2],x[1])){
-                                          union(x[2],x[1])
-                                        } else if(int_overlaps(x[2],x[3])){
-                                          union(x[2],x[3])
-                                        } else {
-                                          x[2]
-                                        }
-                                      },
-                                      fill = NA,partial = FALSE))
   return(df2)
 }
 
@@ -345,12 +289,6 @@ window = slope_window, na_value = NA,unlist = TRUE)
     return(list(plot_return,plot_data4))
 }
 
-# data = pt_data5
-# facet_count = 6
-# window = peak_window
-# groupscale = F
-
-
 .plot_data5_fun <- function(data,facet_count,window,groupscale=FALSE){
   if(groupscale == TRUE){
     plot_data5 <- data %>%
@@ -437,7 +375,9 @@ window = slope_window, na_value = NA,unlist = TRUE)
   return(list(plot_return,plot_data5))
 }
 
-
+###############################################################
+# Peak matching function
+###############################################################
 .matched_peaks_fun <- function(data = pt_data6){
  
   # build dataframe of just q peaks; 
@@ -463,9 +403,11 @@ window = slope_window, na_value = NA,unlist = TRUE)
   
 }
 
-# data = pt_data6
-# peak_table = matched_peaks
-# view_minutes = 23
+###############################################################
+# view port function for setting time window around peak to use 
+# in plotting
+###############################################################
+
 
 .view_port_fun <- function(data,peak_table,view_minutes){
   # Add viewing interval to matched_peaks df
