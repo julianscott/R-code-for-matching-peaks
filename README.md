@@ -1,8 +1,3 @@
-# R-code-for-matching-peaks
-# Author: Julian A Scott, National Stream and Aquatic Ecology Center, US Forest Service
-# Contact: julianscott@usda.gov - 970-295-5974 - julianscotta@gmail.com
-# 23 March, 2020
-
 # Code for (1) identifying peaks in two data time series, (2) matching peaks separated by 
 # a lag/lead for upstream/downstream timestamps, (3) plotting peaks.
 
