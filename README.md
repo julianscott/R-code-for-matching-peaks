@@ -14,23 +14,23 @@
 
 (3) constructing stage-discharge rating tables or rating curves at a study reach with an upstream/downstream stream gage, etc.
 
-## SCRIPTS:
+# SCRIPTS:
 
-# peak_matching_script.R
+### peak_matching_script.R
 Use this script for matching peaks in two properly formatted time series.
 
-# functions_for_peak_matching.R
+### functions_for_peak_matching.R
 Download this script and place in working directory or some other noted directory. This script provides SOURCE code for functions used in peak_matching_script.R.
 
-# sync_time_series_script.R
+### sync_time_series_script.R
 Use this optional script for creating input that is properly formatted for analysis in the peak_matching_script.R.
 
-## EXAMPLE DATA:
+# EXAMPLE DATA:
 
-# example_synced_sensor_data.csv
+### example_synced_sensor_data.csv
 Example data for use in running the peak_matching_script.R 
 
-# example_stage_sensor_data.csv
+### example_stage_sensor_data.csv
 Example data for use in running the sync_time_series_script.R.
 
 
