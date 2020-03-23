@@ -1,14 +1,21 @@
 Code for:
+
 (1) identifying peaks in two data time series, 
+
 (2) matching peaks separated by a lag/lead for upstream/downstream timestamps, 
+
 (3) plotting peaks.
 
 Potential uses of this script includes: 
+
 (1) automatically identifying paired peaks in two dependent data time series, 
+
 (2) calculating discharge-dependent lead or lag 'shift' between stream gage observations and upstream or downstream river stage observations, 
+
 (3) constructing stage-discharge rating tables or rating curves at a study reach with an upstream/downstream stream gage, etc.
 
 Required input file:
+
 1. A data frame (called 'pt_data' below) with three columns: datetime, stage, and q.
    File can be a user-provided csv or produced using the 'sensor_and_gage_sync_generalized' 
    script available at https://github.com/julianscott/R-code-for-matching-peaks.
@@ -22,12 +29,16 @@ pt_data <- fread("https://raw.githubusercontent.com/julianscott/R-code-for-match
 This strategy uses 4 steps for matching peaks. Starting with the dataframe called pt_data, the dataframe name is modified after each step so that, at the end, we have objects called pt_data2, pt_data3, pt_data4, and pt_data5. Each consequtive dataframe is based on the 
 previous table and has the same number of rows, but additional columns, containing slope, peak, and other types of diagnostic data.  
 Here is a description of the main objects created in this script:
+
 pt_data: Dataframe with two time series of data that shair a datetime column.
+
 pt_data2: Add moving average slope, using a defined window. Also adds a slope sign column.
+
 pt_data3: Flag each observation that meets the criteria as a 'peak'. Uses a rolling window
           to tests whether the observation is the maximum in the defined window.
 pt_data4: For each flagged 'peak', flag again those observations that occur within a window where 
-          the slope is greater than the given percentile of all slopes (95% is default).  
+          the slope is greater than the given percentile of all slopes (95% is default). 
+          
 pt_data5: Tests whether there are flagged peaks in one time series that precede or follow the 
           occurrence of a flagged peak in the other time series. Takes arguments to set the 
           window in which to look for peaks and for which peak flag to base the test on: 
