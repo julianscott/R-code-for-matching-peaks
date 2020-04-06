@@ -34,7 +34,7 @@ lapply(packages,library,character.only=TRUE)
 # To run script, either download pt_data download example synced up pressure stage and discharge 
 # time series data (provided below at the github link). 
 # Or, read in your own synced up data. Format of your own data must match example data. 
-pt_data <- fread("https://raw.githubusercontent.com/julianscott/R-code-for-matching-peaks/master/synced_Q_and_stage_timeseries.csv")
+pt_data <- fread("https://raw.githubusercontent.com/julianscott/R-code-for-matching-peaks/master/example_synced_Q_and_stage_timeseries.csv")
 
 # Ensure datetime data is formatted correctly. For the example, its year-month-day hour:minute:second 
 # in the GMT-8 time (i.e., "Etc/GMT+8"), or the United States Pacific time zone without daylight savings
