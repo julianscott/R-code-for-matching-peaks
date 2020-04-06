@@ -35,7 +35,7 @@ lapply(packages,library,character.only=TRUE)
 
 # read in example pressure transducer data from my github site:
 # Like this example, PT sensor files should have two columns, 1=datetime,2=stage
-PT <- fread("https://raw.githubusercontent.com/julianscott/R-code-for-matching-peaks/master/mid_SMR_m.csv")
+PT <- fread("https://raw.githubusercontent.com/julianscott/R-code-for-matching-peaks/master/example_stage_sensor_data.csv")
 
 # standardize column names
 colnames(PT) <- c("DateTime","h")
